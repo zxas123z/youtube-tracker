@@ -64,6 +64,7 @@
       display: flex;
       gap: 8px;
       margin-top: 12px;
+      flex-wrap: wrap;
     }
     .video-item {
       border: 1px solid #eee;
@@ -87,6 +88,7 @@
       font-weight: bold;
       font-size: 0.95rem;
       margin-bottom: 4px;
+      padding-right: 45px;
     }
     .video-channel {
       font-size: 0.8rem;
@@ -130,7 +132,6 @@
       border-radius: 6px;
       border: 1px solid #ccc;
     }
-    /* 修改容器高度：確保手機直向時圖表不會太扁 */
     .chart-container {
       position: relative;
       width: 100%;
@@ -176,8 +177,8 @@
   <div class="card">
     <h2>新增追蹤影片</h2>
     <div class="input-group">
-      <input type="text" id="targetInput" placeholder="輸入影片 ID 或 URL">
-      <button onclick="addVideo()">新增</button>
+      <input type="text" id="targetInput" placeholder="輸入影片 ID、網址或搜尋關鍵字">
+      <button onclick="addVideo()">新增 / 搜尋</button>
     </div>
   </div>
 
@@ -185,6 +186,7 @@
     <h2>追蹤清單</h2>
     <div id="videoList"></div>
     <div class="btn-group">
+      <button onclick="refreshAllData()">手動刷新全部數據</button>
       <button onclick="exportJSON()">匯出 JSON</button>
       <button onclick="exportCSV()">匯出 CSV</button>
       <button onclick="importJSON()">匯入 JSON</button>
@@ -265,7 +267,7 @@
 
     function extractVideoId(input) {
       input = input.trim();
-      if (input.length === 11) return input;
+      if (input.length === 11 && !input.includes(' ')) return input;
       const match = input.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
       return match ? match[1] : null;
     }
@@ -275,14 +277,31 @@
         alert('請先設定 API Key');
         return;
       }
-      const input = document.getElementById('targetInput').value;
-      const videoId = extractVideoId(input);
+      const input = document.getElementById('targetInput').value.trim();
+      if (!input) return;
+
+      let videoId = extractVideoId(input);
+
+      // 若非直接的網址或 ID，嘗試進行關鍵字搜尋
       if (!videoId) {
-        alert('無效的影片 ID 或網址');
-        return;
+        try {
+          const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(input)}&key=${apiKey}`);
+          const searchData = await searchRes.json();
+          if (searchData.items && searchData.items.length > 0) {
+            videoId = searchData.items[0].id.videoId;
+          } else {
+            alert('搜尋不到相關影片');
+            return;
+          }
+        } catch (e) {
+          alert(`搜尋失敗：${e.message}`);
+          return;
+        }
       }
 
-      await fetchVideoData(videoId, apiKey);
+      if (videoId) {
+        await fetchVideoData(videoId, apiKey);
+      }
     }
 
     async function fetchVideoData(id, key, silent = false) {
@@ -296,7 +315,7 @@
         }
 
         if (!data.items || data.items.length === 0) {
-          if (!silent) alert('找不到該影片數據，請確認 ID 是否正確');
+          if (!silent) alert('找不到該影片數據');
           return;
         }
 
@@ -311,17 +330,22 @@
         const existingIndex = trackedItems.findIndex(i => i.id === item.id);
         
         if (existingIndex > -1) {
-          trackedItems[existingIndex].title = item.snippet.title;
-          trackedItems[existingIndex].thumbnail = item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : item.snippet.thumbnails.default.url;
-          trackedItems[existingIndex].views = currentViews;
-          trackedItems[existingIndex].likes = likes;
-          trackedItems[existingIndex].comments = comments;
-          trackedItems[existingIndex].channelTitle = channelTitle;
-          trackedItems[existingIndex].publishedAt = publishedAt;
-          trackedItems[existingIndex].updatedAt = now;
-          
-          if (!trackedItems[existingIndex].history) trackedItems[existingIndex].history = [];
-          trackedItems[existingIndex].history.push({ timestamp: now, views: currentViews });
+          // 更新資料時，保留原有的歷史紀錄並新增當前點
+          let history = trackedItems[existingIndex].history || [];
+          history.push({ timestamp: now, views: currentViews });
+
+          trackedItems[existingIndex] = {
+            ...trackedItems[existingIndex],
+            title: item.snippet.title,
+            thumbnail: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : item.snippet.thumbnails.default.url,
+            views: currentViews,
+            likes: likes,
+            comments: comments,
+            channelTitle: channelTitle,
+            publishedAt: publishedAt,
+            updatedAt: now,
+            history: history
+          };
         } else {
           trackedItems.push({
             id: item.id,
@@ -339,19 +363,23 @@
 
         saveData();
         renderList();
-        if (typeof updateChartSelectOptions === 'function') updateChartSelectOptions();
-        
-        try {
-          if (typeof updateChart === 'function') updateChart();
-          if (typeof updateAnalytics === 'function') updateAnalytics();
-        } catch (chartErr) {
-          console.error("更新圖表或分析時出錯：", chartErr);
-        }
-
+        updateChartSelectOptions();
+        updateChartAndAnalytics();
         document.getElementById('targetInput').value = '';
       } catch (e) {
         if (!silent) alert(`獲取數據失敗：${e.message}`);
       }
+    }
+
+    async function refreshAllData() {
+      if (!apiKey) {
+        alert('請先設定 API Key');
+        return;
+      }
+      for (const item of trackedItems) {
+        await fetchVideoData(item.id, apiKey, true);
+      }
+      alert('所有影片數據更新完畢');
     }
 
     function removeItem(id) {
@@ -427,7 +455,7 @@
         },
         options: {
           responsive: true,
-          maintainAspectRatio: false, // 禁止強制固定比例，讓 CSS 高度生效
+          maintainAspectRatio: false,
           scales: {
             x: {
               title: { display: true, text: '時間' }
@@ -458,7 +486,6 @@
         return;
       }
 
-      // 1. 處理數據並紀錄推出時間點與實際紀錄時間點
       const processedItems = trackedItems.map(item => {
         let combinedHistory = [...(item.history || [])];
         let pubTimeISO = null;
@@ -472,7 +499,6 @@
         return { ...item, combinedHistory, pubTimeISO };
       });
 
-      // 2. 找出全域最新時間戳記
       let maxTimestamp = 0;
       processedItems.forEach(item => {
         item.combinedHistory.forEach(h => {
@@ -481,7 +507,6 @@
         });
       });
 
-      // 3. 建立時間地圖與統一時間集合
       const timeSet = new Set();
       const maxDate = new Date(maxTimestamp);
       maxDate.setSeconds(0, 0);
@@ -491,7 +516,6 @@
         item.historyMap = new Map();
         item.combinedHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-        // 找出第一次實際紀錄的時間
         let firstRealTimeISO = null;
         if (item.combinedHistory.length > 0) {
           const fd = new Date(item.combinedHistory[0].timestamp);
@@ -499,7 +523,6 @@
           firstRealTimeISO = fd.toISOString();
         }
 
-        // 若勾選推出日期且有發布時間
         if (item.pubTimeISO) {
           if (!firstRealTimeISO || item.pubTimeISO <= firstRealTimeISO) {
             item.historyMap.set(item.pubTimeISO, 0);
@@ -507,7 +530,6 @@
           }
         }
 
-        // 紀錄實際抓到的觀看量歷史點
         item.combinedHistory.forEach(h => {
           const d = new Date(h.timestamp);
           d.setSeconds(0, 0);
@@ -516,7 +538,6 @@
           timeSet.add(minISO);
         });
 
-        // 補齊最後一個最新時間點，使右側數據對齊
         const lastViews = item.combinedHistory.length > 0 
           ? item.combinedHistory[item.combinedHistory.length - 1].views 
           : 0;
@@ -527,11 +548,9 @@
         timeSet.add(maxMinISO);
       });
 
-      // 4. X 軸標籤排序
       const sortedISOList = Array.from(timeSet).sort((a, b) => new Date(a) - new Date(b));
       const labels = sortedISOList.map(t => formatDateTime(t));
 
-      // 5. 繪製折線圖
       const itemsToDisplay = selectedId === 'ALL' 
         ? processedItems 
         : processedItems.filter(i => i.id === selectedId);
@@ -561,7 +580,6 @@
             return val;
           }
 
-          // 推出日與第一次紀錄之間補 null，讓 Chart.js 自動拉直線
           if (item.pubTimeISO && iso > item.pubTimeISO && !hasReachedFirstRecord) {
             return null;
           }
@@ -576,7 +594,7 @@
           backgroundColor: selectedId === 'ALL' ? color : 'rgba(255, 0, 0, 0.1)',
           fill: selectedId !== 'ALL',
           tension: 0.1,
-          spanGaps: true // 跨越 null 點，將 0 與第一次紀錄點拉出直線
+          spanGaps: true
         };
       });
 
@@ -603,7 +621,6 @@
       document.getElementById('statTotalViews').textContent = totalViews.toLocaleString();
       document.getElementById('statTopVideo').textContent = topVideo ? topVideo.title : '-';
 
-      // 簡化計算每小時增長
       let totalGrowth = 0;
       trackedItems.forEach(item => {
         if (item.history && item.history.length >= 2) {
