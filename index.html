@@ -184,6 +184,32 @@
       margin-top: 15px;
       flex-wrap: wrap;
     }
+
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .analytics-box {
+      background-color: #f1f3f5;
+      padding: 15px;
+      border-radius: 6px;
+      border-left: 4px solid var(--primary-color);
+    }
+
+    .analytics-box .title {
+      font-size: 12px;
+      color: #6c757d;
+      margin-bottom: 5px;
+    }
+
+    .analytics-box .value {
+      font-size: 18px;
+      font-weight: bold;
+      color: var(--text-color);
+    }
   </style>
 </head>
 <body>
@@ -236,14 +262,35 @@
     </div>
   </div>
 
-  <!-- 數據圖表分析 -->
+  <!-- 數據圖表與統計分析 -->
   <div class="card">
-    <h2>4. 播放量變化圖表</h2>
+    <h2>4. 播放量變化圖表與數據分析</h2>
     <div class="input-group">
-      <select id="chartItemSelect" onchange="updateChart()">
+      <select id="chartItemSelect" onchange="updateChartAndAnalytics()">
         <option value="ALL">顯示所有項目</option>
       </select>
     </div>
+    
+    <!-- 數據分析儀表板 -->
+    <div class="analytics-grid" id="analyticsDashboard">
+      <div class="analytics-box">
+        <div class="title">總追蹤項目</div>
+        <div class="value" id="statTotalItems">0</div>
+      </div>
+      <div class="analytics-box">
+        <div class="title">總播放量</div>
+        <div class="value" id="statTotalViews">0</div>
+      </div>
+      <div class="analytics-box">
+        <div class="title">近一小時平均增長</div>
+        <div class="value" id="statHourlyGrowth">0 / hr</div>
+      </div>
+      <div class="analytics-box">
+        <div class="title">最高播放量項目</div>
+        <div class="value" id="statTopItem">-</div>
+      </div>
+    </div>
+
     <div class="chart-container">
       <canvas id="viewsChart"></canvas>
     </div>
@@ -344,7 +391,7 @@
       saveData();
       renderList();
       updateChartSelectOptions();
-      updateChart();
+      updateChartAndAnalytics();
       document.getElementById('targetInput').value = '';
     } catch (e) {
       if (!silent) alert('獲取數據失敗，請檢查網路或 API Key');
@@ -377,7 +424,7 @@
     saveData();
     renderList();
     updateChartSelectOptions();
-    updateChart();
+    updateChartAndAnalytics();
   }
 
   function renderList() {
@@ -405,7 +452,7 @@
           <img src="${item.thumbnail}" alt="縮圖">
           <div class="item-details">
             <a class="item-title" href="https://www.youtube.com/watch?v=${item.id}" target="_blank">${escapeHtml(item.title)}</a>
-            <div class="item-stats">播放量：${item.views.toLocaleString()} 次 (最後更新：${new Date(item.updatedAt).toLocaleTimeString()})</div>
+            <div class="item-stats">播放量：${item.views.toLocaleString()} 次 (最後更新：${formatHour(item.updatedAt)})</div>
           </div>
         </div>
         <div class="action-buttons">
@@ -434,6 +481,14 @@
     }
   }
 
+  function formatHour(isoString) {
+    const d = new Date(isoString);
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const date = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    return `${month}/${date} ${hours}:00`;
+  }
+
   function initChart() {
     const ctx = document.getElementById('viewsChart').getContext('2d');
     chartInstance = new Chart(ctx, {
@@ -447,7 +502,7 @@
         maintainAspectRatio: false,
         scales: {
           x: {
-            title: { display: true, text: '時間' }
+            title: { display: true, text: '時間 (小時)' }
           },
           y: {
             title: { display: true, text: '播放次數' },
@@ -456,7 +511,12 @@
         }
       }
     });
+    updateChartAndAnalytics();
+  }
+
+  function updateChartAndAnalytics() {
     updateChart();
+    updateAnalytics();
   }
 
   function updateChart() {
@@ -478,7 +538,7 @@
     });
 
     const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => new Date(a) - new Date(b));
-    const labels = sortedTimestamps.map(t => new Date(t).toLocaleString());
+    const labels = sortedTimestamps.map(t => formatHour(t));
 
     let datasets = [];
 
@@ -486,7 +546,6 @@
       datasets = trackedItems.map((item, idx) => {
         const color = CHART_COLORS[idx % CHART_COLORS.length];
         const dataMap = new Map((item.history || []).map(h => [h.timestamp, h.views]));
-        
         const data = sortedTimestamps.map(ts => dataMap.get(ts) ?? null);
 
         return {
@@ -520,6 +579,61 @@
     chartInstance.data.labels = labels;
     chartInstance.data.datasets = datasets;
     chartInstance.update();
+  }
+
+  function updateAnalytics() {
+    const selectedId = document.getElementById('chartItemSelect').value;
+    const totalItemsEl = document.getElementById('statTotalItems');
+    const totalViewsEl = document.getElementById('statTotalViews');
+    const hourlyGrowthEl = document.getElementById('statHourlyGrowth');
+    const topItemEl = document.getElementById('statTopItem');
+
+    if (trackedItems.length === 0) {
+      totalItemsEl.innerText = '0';
+      totalViewsEl.innerText = '0';
+      hourlyGrowthEl.innerText = '0 / hr';
+      topItemEl.innerText = '-';
+      return;
+    }
+
+    if (selectedId === 'ALL') {
+      totalItemsEl.innerText = trackedItems.length;
+      
+      const sumViews = trackedItems.reduce((acc, item) => acc + item.views, 0);
+      totalViewsEl.innerText = sumViews.toLocaleString();
+
+      let top = trackedItems.reduce((max, item) => item.views > max.views ? item : max, trackedItems[0]);
+      topItemEl.innerText = top.title;
+
+      let totalGrowth = 0;
+      trackedItems.forEach(item => {
+        totalGrowth += calculateHourlyGrowth(item);
+      });
+      hourlyGrowthEl.innerText = `+${Math.round(totalGrowth).toLocaleString()} / hr`;
+    } else {
+      const item = trackedItems.find(i => i.id === selectedId);
+      if (item) {
+        totalItemsEl.innerText = '1 (單項對比)';
+        totalViewsEl.innerText = item.views.toLocaleString();
+        topItemEl.innerText = item.title;
+        
+        const growth = calculateHourlyGrowth(item);
+        hourlyGrowthEl.innerText = `+${Math.round(growth).toLocaleString()} / hr`;
+      }
+    }
+  }
+
+  function calculateHourlyGrowth(item) {
+    if (!item.history || item.history.length < 2) return 0;
+    
+    const latest = item.history[item.history.length - 1];
+    const previous = item.history[item.history.length - 2];
+
+    const timeDiffHours = (new Date(latest.timestamp) - new Date(previous.timestamp)) / (1000 * 60 * 60);
+    const viewsDiff = latest.views - previous.views;
+
+    if (timeDiffHours <= 0) return 0;
+    return viewsDiff / timeDiffHours;
   }
 
   function startAutoRefresh() {
@@ -590,7 +704,7 @@
         saveData();
         renderList();
         updateChartSelectOptions();
-        updateChart();
+        updateChartAndAnalytics();
         alert('數據匯入成功！');
       } catch (err) {
         alert('匯入失敗：無法解析 JSON 檔案');
