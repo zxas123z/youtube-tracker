@@ -289,6 +289,55 @@
       gap: 8px;
       margin-top: 10px;
     }
+@media (max-width: 768px) {
+  body {
+    height: auto;
+    overflow-y: auto;
+  }
+
+  /* 將雙欄改回單欄直條式 */
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    overflow: visible;
+  }
+
+  /* 頂部控制區在手機上自動換行 */
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .top-controls {
+    width: 100%;
+  }
+
+  .top-controls input[type="password"] {
+    flex: 1;
+    width: auto !important;
+  }
+
+  /* 新增區塊輸入框改為上下堆疊 */
+  .add-mode-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* 數據統計區在手機上改為 2 欄 */
+  .analytics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* 列表與圖表給定固定高度以利手機滾動 */
+  .item-list {
+    max-height: 400px;
+  }
+
+  .chart-container {
+    height: 300px;
+  }
+}
   </style>
 </head>
 <body>
