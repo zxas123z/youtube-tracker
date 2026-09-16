@@ -593,13 +593,18 @@
     return (match && match[2].length === 11) ? match[2] : (url.length === 11 ? url : null);
   }
 
-  async function fetchVideoData(id, key, silent = false) {
+async function fetchVideoData(id, key, silent = false) {
     try {
       const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${id}&key=${key}`);
       const data = await res.json();
       
+      if (data.error) {
+        if (!silent) alert(`API 錯誤 (${data.error.code})：${data.error.message}`);
+        return;
+      }
+
       if (!data.items || data.items.length === 0) {
-        if (!silent) alert('找不到該影片數據');
+        if (!silent) alert('找不到該影片數據，請確認 ID 是否正確');
         return;
       }
 
@@ -642,11 +647,19 @@
 
       saveData();
       renderList();
-      SelectOptions();
-      AndAnalytics();
+      if (typeof updateChartSelectOptions === 'function') updateChartSelectOptions();
+      
+      // 避免圖表或分析函數拋出錯誤導致彈出失敗提示
+      try {
+        if (typeof updateChart === 'function') updateChart();
+        if (typeof updateAnalytics === 'function') updateAnalytics();
+      } catch (chartErr) {
+        console.error("更新圖表或分析時出錯：", chartErr);
+      }
+
       document.getElementById('targetInput').value = '';
     } catch (e) {
-      if (!silent) alert('獲取數據失敗');
+      if (!silent) alert(`獲取數據失敗：${e.message}`);
     }
   }
 
