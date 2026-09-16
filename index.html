@@ -642,8 +642,8 @@
 
       saveData();
       renderList();
-      updateChartSelectOptions();
-      updateChartAndAnalytics();
+      SelectOptions();
+      AndAnalytics();
       document.getElementById('targetInput').value = '';
     } catch (e) {
       if (!silent) alert('獲取數據失敗');
@@ -675,8 +675,8 @@
     trackedItems = trackedItems.filter(item => item.id !== id);
     saveData();
     renderList();
-    updateChartSelectOptions();
-    updateChartAndAnalytics();
+    SelectOptions();
+    AndAnalytics();
   }
 
   function calculateDailyAverage(views, publishedAt) {
@@ -820,7 +820,7 @@
     updateAnalytics();
   }
 
-  function updateChart() {
+function updateChart() {
     if (!chartInstance) return;
     const selectedId = document.getElementById('chartItemSelect').value;
     const includePublishDate = document.getElementById('includePublishDateCheckbox').checked;
