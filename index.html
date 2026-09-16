@@ -715,12 +715,32 @@
     }
 
     listEl.innerHTML = itemsToRender.map(item => {
+function renderList() {
+    const listEl = document.getElementById('trackList');
+    const sortType = document.getElementById('sortSelect').value;
+
+    let itemsToRender = [...trackedItems];
+    if (sortType === 'views-desc') itemsToRender.sort((a, b) => b.views - a.views);
+    else if (sortType === 'views-asc') itemsToRender.sort((a, b) => a.views - b.views);
+    else if (sortType === 'title-asc') itemsToRender.sort((a, b) => a.title.localeCompare(b.title));
+
+    if (itemsToRender.length === 0) {
+      listEl.innerHTML = '<p style="color:#6c757d; text-align:center;">尚無追蹤項目</p>';
+      return;
+    }
+
+    listEl.innerHTML = itemsToRender.map(item => {
       const likes = item.likes || 0;
       const comments = item.comments || 0;
       const views = item.views || 0;
       const engagementRate = views > 0 ? (((likes + comments) / views) * 100).toFixed(2) : '0.00';
       const dailyAvg = calculateDailyAverage(views, item.publishedAt);
       const growth24h = calculate24hGrowth(item.history);
+
+      const pubDate = item.publishedAt ? new Date(item.publishedAt) : null;
+      const publishedDateStr = pubDate ? pubDate.toLocaleDateString() : '未知';
+      const daysPublished = pubDate ? Math.max(0, Math.floor((new Date() - pubDate) / (1000 * 60 * 60 * 24))) : 0;
+      const lastUpdateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleTimeString() : '未知';
 
       return `
         <div class="item-card">
@@ -729,9 +749,9 @@
             <div class="item-details">
               <a class="item-title" href="https://www.youtube.com/watch?v=${item.id}" target="_blank">${escapeHtml(item.title)}</a>
               <div class="channel-name">${escapeHtml(item.channelTitle || '未知')}</div>
-              <div class="item-meta">
-                <span>發布日期：${publishedDateStr} (${daysPublished} 天前)</span>
-                <span>最後更新：${new Date(item.updatedAt).toLocaleTimeString()}</span>
+              <div class="item-meta" style="font-size: 11px; color: #6c757d; margin: 2px 0;">
+                <span>發布日期：${publishedDateStr} (${daysPublished} 天前)</span> | 
+                <span>最後更新：${lastUpdateStr}</span>
               </div>
               <div class="stats-badge-container">
                 <span class="badge badge-highlight">觀看：${views.toLocaleString()}</span>
@@ -747,7 +767,6 @@
       `;
     }).join('');
   }
-
   function updateChartSelectOptions() {
     const select = document.getElementById('chartItemSelect');
     const currentValue = select.value;
