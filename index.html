@@ -99,6 +99,69 @@
       margin-top: 5px;
     }
 
+    .tab-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .tab-btn {
+      background-color: #e9ecef;
+      color: #495057;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .tab-btn.active {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    .search-results {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 15px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .search-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid var(--border-color);
+      padding: 10px;
+      border-radius: 6px;
+      background: #fafafa;
+    }
+
+    .search-item-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .search-item-info img {
+      width: 80px;
+      height: 60px;
+      border-radius: 4px;
+      object-fit: cover;
+    }
+
+    .search-item-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .search-item-channel {
+      font-size: 12px;
+      color: #6c757d;
+    }
+
     .controls-header {
       display: flex;
       justify-content: space-between;
@@ -255,7 +318,7 @@
   <div class="card">
     <h2>1. API Key 設定</h2>
     <div class="input-group">
-      <input type="password" id="apiKeyInput" placeholder="請輸入 YouTube Data API v3 Key">
+      <input type="password" id="apiKeyInput" value="你的 API 金鑰" placeholder="AIzaSyCSwZb7omF8gD2wCrxw6O6USj-XMWNDrmU">
       <button onclick="saveApiKey()">儲存 Key</button>
     </div>
     <div class="help-text">API Key 將會安全地儲存於您的瀏覽器本地（localStorage）中。</div>
@@ -264,9 +327,26 @@
   <!-- 新增追蹤項目 -->
   <div class="card">
     <h2>2. 新增追蹤項目</h2>
-    <div class="input-group">
-      <input type="text" id="targetInput" placeholder="輸入 YouTube 影片網址或 ID (例如: https://www.youtube.com/watch?v=dQw4w9WgXcQ)">
-      <button onclick="addTrackItem()">查詢並追蹤</button>
+    <div class="tab-group">
+      <button class="tab-btn active" id="tabUrlBtn" onclick="switchAddTab('url')">網址/ID 新增</button>
+      <button class="tab-btn" id="tabSearchBtn" onclick="switchAddTab('search')">關鍵字搜尋</button>
+    </div>
+
+    <!-- 模式 A：網址/ID 模式 -->
+    <div id="urlModeSection">
+      <div class="input-group">
+        <input type="text" id="targetInput" placeholder="輸入 YouTube 影片網址或 ID (例如: https://www.youtube.com/watch?v=dQw4w9WgXcQ)">
+        <button onclick="addTrackItem()">查詢並追蹤</button>
+      </div>
+    </div>
+
+    <!-- 模式 B：搜尋模式 -->
+    <div id="searchModeSection" style="display: none;">
+      <div class="input-group">
+        <input type="text" id="searchInput" placeholder="輸入歌曲或影片名稱關鍵字..." onkeypress="if(event.key==='Enter') searchYoutube()">
+        <button onclick="searchYoutube()">搜尋</button>
+      </div>
+      <div id="searchResults" class="search-results"></div>
     </div>
   </div>
 
@@ -305,7 +385,6 @@
       </select>
     </div>
     
-    <!-- 數據分析儀表板 -->
     <div class="analytics-grid" id="analyticsDashboard">
       <div class="analytics-box">
         <div class="title">總追蹤項目</div>
@@ -361,6 +440,86 @@
 
   function getApiKey() {
     return localStorage.getItem('ytApiKey');
+  }
+
+  function switchAddTab(mode) {
+    const urlSection = document.getElementById('urlModeSection');
+    const searchSection = document.getElementById('searchModeSection');
+    const urlBtn = document.getElementById('tabUrlBtn');
+    const searchBtn = document.getElementById('tabSearchBtn');
+
+    if (mode === 'url') {
+      urlSection.style.display = 'block';
+      searchSection.style.display = 'none';
+      urlBtn.classList.add('active');
+      searchBtn.classList.remove('active');
+    } else {
+      urlSection.style.display = 'none';
+      searchSection.style.display = 'block';
+      searchBtn.classList.add('active');
+      urlBtn.classList.remove('active');
+    }
+  }
+
+  async function searchYoutube() {
+    const apiKey = getApiKey();
+    if (!apiKey) return alert('請先設定 API Key！');
+
+    const query = document.getElementById('searchInput').value.trim();
+    if (!query) return alert('請輸入搜尋關鍵字');
+
+    const resultsContainer = document.getElementById('searchResults');
+    resultsContainer.innerHTML = '<p style="color:#6c757d; text-align:center;">搜尋中...</p>';
+
+    try {
+      const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=5&q=${encodeURIComponent(query)}&key=${apiKey}`);
+      const data = await res.json();
+
+      if (!data.items || data.items.length === 0) {
+        resultsContainer.innerHTML = '<p style="color:#6c757d; text-align:center;">找不到相關結果</p>';
+        return;
+      }
+
+      resultsContainer.innerHTML = data.items.map(item => {
+        const videoId = item.id.videoId;
+        const title = escapeHtml(item.snippet.title);
+        const channel = escapeHtml(item.snippet.channelTitle);
+        const thumb = item.snippet.thumbnails.default ? item.snippet.thumbnails.default.url : '';
+
+        const isTracked = trackedItems.some(i => i.id === videoId);
+
+        return `
+          <div class="search-item">
+            <div class="search-item-info">
+              <img src="${thumb}" alt="縮圖">
+              <div>
+                <div class="search-item-title">${title}</div>
+                <div class="search-item-channel">${channel}</div>
+              </div>
+            </div>
+            <button class="${isTracked ? 'btn-secondary' : ''}" 
+                    onclick="addTrackItemById('${videoId}')" 
+                    ${isTracked ? 'disabled' : ''}>
+              ${isTracked ? '已在列表中' : '加入追蹤'}
+            </button>
+          </div>
+        `;
+      }).join('');
+    } catch (e) {
+      resultsContainer.innerHTML = '<p style="color:red; text-align:center;">搜尋失敗，請檢查 API Key 或網路狀況</p>';
+    }
+  }
+
+  async function addTrackItemById(videoId) {
+    const apiKey = getApiKey();
+    if (!apiKey) return alert('請先設定 API Key！');
+    await fetchVideoData(videoId, apiKey);
+    
+    // 更新搜尋結果按鈕狀態
+    const searchInput = document.getElementById('searchInput').value.trim();
+    if (searchInput) {
+      searchYoutube();
+    }
   }
 
   async function addTrackItem() {
