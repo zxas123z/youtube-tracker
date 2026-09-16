@@ -47,14 +47,13 @@
       align-items: center;
     }
 
-    /* 單頁面 Grid 佈局 */
     .dashboard-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       grid-template-rows: auto 1fr;
       gap: 15px;
       flex: 1;
-      min-height: 0; /* 避免 flex 子項目溢出 */
+      min-height: 0;
     }
 
     .card {
@@ -75,7 +74,6 @@
       margin-bottom: 12px;
     }
 
-    /* 全寬頂部設定卡片 */
     .card-full {
       grid-column: 1 / -1;
     }
@@ -174,12 +172,28 @@
     .search-item-title { font-size: 13px; font-weight: 600; }
     .search-item-channel { font-size: 11px; color: #6c757d; }
 
-    /* 追蹤列表滾動區塊 */
     .controls-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 10px;
+    }
+
+    .chart-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      max-width: 60%;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #495057;
+      cursor: pointer;
+      white-space: nowrap;
     }
 
     .status-bar {
@@ -260,7 +274,6 @@
       font-weight: 600;
     }
 
-    /* 圖表與統計區塊 */
     .analytics-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -289,55 +302,57 @@
       gap: 8px;
       margin-top: 10px;
     }
-@media (max-width: 768px) {
-  body {
-    height: auto;
-    overflow-y: auto;
-  }
 
-  /* 將雙欄改回單欄直條式 */
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto;
-    overflow: visible;
-  }
+    @media (max-width: 768px) {
+      body {
+        height: auto;
+        overflow-y: auto;
+      }
 
-  /* 頂部控制區在手機上自動換行 */
-  .dashboard-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+        overflow: visible;
+      }
 
-  .top-controls {
-    width: 100%;
-  }
+      .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
 
-  .top-controls input[type="password"] {
-    flex: 1;
-    width: auto !important;
-  }
+      .top-controls {
+        width: 100%;
+      }
 
-  /* 新增區塊輸入框改為上下堆疊 */
-  .add-mode-container {
-    flex-direction: column;
-    align-items: stretch;
-  }
+      .top-controls input[type="password"] {
+        flex: 1;
+        width: auto !important;
+      }
 
-  /* 數據統計區在手機上改為 2 欄 */
-  .analytics-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+      .add-mode-container {
+        flex-direction: column;
+        align-items: stretch;
+      }
 
-  /* 列表與圖表給定固定高度以利手機滾動 */
-  .item-list {
-    max-height: 400px;
-  }
+      .analytics-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
 
-  .chart-container {
-    height: 300px;
-  }
-}
+      .item-list {
+        max-height: 400px;
+      }
+
+      .chart-container {
+        height: 300px;
+      }
+
+      .chart-controls {
+        max-width: 100%;
+        flex-direction: column;
+        align-items: flex-end;
+      }
+    }
   </style>
 </head>
 <body>
@@ -351,7 +366,6 @@
 </div>
 
 <div class="dashboard-grid">
-  <!-- 頂部：新增區塊 -->
   <div class="card card-full">
     <div class="add-mode-container">
       <div class="tab-group">
@@ -376,7 +390,6 @@
     <div id="searchResults" class="search-results"></div>
   </div>
 
-  <!-- 左側：已追蹤列表 -->
   <div class="card">
     <div class="controls-header">
       <h2>追蹤列表</h2>
@@ -402,13 +415,18 @@
     </div>
   </div>
 
-  <!-- 右側：圖表與分析 -->
   <div class="card">
     <div class="controls-header">
       <h2>圖表分析</h2>
-      <select id="chartItemSelect" onchange="updateChartAndAnalytics()" style="padding: 4px 8px; font-size: 12px; width: auto;">
-        <option value="ALL">顯示所有項目</option>
-      </select>
+      <div class="chart-controls">
+        <label class="checkbox-label">
+          <input type="checkbox" id="includePublishDateCheckbox" onchange="updateChartAndAnalytics()">
+          包含推出日期
+        </label>
+        <select id="chartItemSelect" onchange="updateChartAndAnalytics()" style="padding: 4px 8px; font-size: 12px; width: 180px;">
+          <option value="ALL">顯示所有項目</option>
+        </select>
+      </div>
     </div>
     
     <div class="analytics-grid" id="analyticsDashboard">
@@ -791,6 +809,7 @@
   function updateChart() {
     if (!chartInstance) return;
     const selectedId = document.getElementById('chartItemSelect').value;
+    const includePublishDate = document.getElementById('includePublishDateCheckbox').checked;
 
     if (trackedItems.length === 0) {
       chartInstance.data.labels = [];
@@ -799,10 +818,22 @@
       return;
     }
 
-    const processedItems = trackedItems.map(item => ({
-      ...item,
-      history: filterSignificantHistory(item.history)
-    }));
+    const processedItems = trackedItems.map(item => {
+      let combinedHistory = [...(item.history || [])];
+      if (includePublishDate && item.publishedAt) {
+        combinedHistory.push({ timestamp: item.publishedAt, views: 0 });
+      }
+      combinedHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      
+      const uniqueMap = new Map();
+      combinedHistory.forEach(h => uniqueMap.set(h.timestamp, h.views));
+      const dedupedHistory = Array.from(uniqueMap.entries()).map(([timestamp, views]) => ({ timestamp, views }));
+
+      return {
+        ...item,
+        history: filterSignificantHistory(dedupedHistory)
+      };
+    });
 
     let allTimestamps = new Set();
     processedItems.forEach(item => item.history?.forEach(h => allTimestamps.add(h.timestamp)));
