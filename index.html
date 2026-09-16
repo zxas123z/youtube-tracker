@@ -832,58 +832,93 @@ function updateChart() {
       return;
     }
 
+    // 1. 處理所有項目的歷史數據
     const processedItems = trackedItems.map(item => {
       let combinedHistory = [...(item.history || [])];
       if (includePublishDate && item.publishedAt) {
         combinedHistory.push({ timestamp: item.publishedAt, views: 0 });
       }
-      combinedHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-      
-      const uniqueMap = new Map();
-      combinedHistory.forEach(h => uniqueMap.set(h.timestamp, h.views));
-      const dedupedHistory = Array.from(uniqueMap.entries()).map(([timestamp, views]) => ({ timestamp, views }));
-
-      return {
-        ...item,
-        history: filterSignificantHistory(dedupedHistory)
-      };
+      return { ...item, combinedHistory };
     });
 
-    let allTimestamps = new Set();
-    processedItems.forEach(item => item.history?.forEach(h => allTimestamps.add(h.timestamp)));
-    const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => new Date(a) - new Date(b));
-    const labels = sortedTimestamps.map(t => formatDateTime(t));
-
-    let datasets = [];
-    if (selectedId === 'ALL') {
-      datasets = processedItems.map((item, idx) => {
-        const color = CHART_COLORS[idx % CHART_COLORS.length];
-        const dataMap = new Map((item.history || []).map(h => [h.timestamp, h.views]));
-        return {
-          label: item.title,
-          data: sortedTimestamps.map(ts => dataMap.get(ts) ?? null),
-          borderColor: color,
-          backgroundColor: color,
-          fill: false,
-          tension: 0.1,
-          spanGaps: true
-        };
+    // 2. 找出全域最新時間戳記
+    let maxTimestamp = 0;
+    processedItems.forEach(item => {
+      item.combinedHistory.forEach(h => {
+        const t = new Date(h.timestamp).getTime();
+        if (t > maxTimestamp) maxTimestamp = t;
       });
-    } else {
-      const item = processedItems.find(i => i.id === selectedId);
-      if (item && item.history) {
-        const dataMap = new Map(item.history.map(h => [h.timestamp, h.views]));
-        datasets.push({
-          label: item.title,
-          data: sortedTimestamps.map(ts => dataMap.get(ts) ?? null),
-          borderColor: '#ff0000',
-          backgroundColor: 'rgba(255, 0, 0, 0.1)',
-          fill: true,
-          tension: 0.1,
-          spanGaps: true
-        });
+    });
+
+    // 3. 收集所有時間點，並將秒數歸零（去重），避免產生重複的刻度標記
+    const timeSet = new Set();
+    
+    // 強制包含全域最新時間
+    const maxTimeISO = new Date(maxTimestamp).toISOString();
+
+    processedItems.forEach(item => {
+      item.historyMap = new Map();
+      
+      // 依時間排序
+      item.combinedHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+      // 將時間簡化至「分」來去重
+      item.combinedHistory.forEach(h => {
+        const d = new Date(h.timestamp);
+        d.setSeconds(0, 0);
+        const minISO = d.toISOString();
+        item.historyMap.set(minISO, h.views);
+        timeSet.add(minISO);
+      });
+
+      // 補齊最後一個最新時間點，確保右側延伸平齊
+      const lastViews = item.combinedHistory.length > 0 
+        ? item.combinedHistory[item.combinedHistory.length - 1].views 
+        : 0;
+      
+      const maxDate = new Date(maxTimestamp);
+      maxDate.setSeconds(0, 0);
+      const maxMinISO = maxDate.toISOString();
+
+      if (!item.historyMap.has(maxMinISO)) {
+        item.historyMap.set(maxMinISO, lastViews);
       }
-    }
+      timeSet.add(maxMinISO);
+    });
+
+    // 4. 建立統一排序的 X 軸標籤
+    const sortedISOList = Array.from(timeSet).sort((a, b) => new Date(a) - new Date(b));
+    const labels = sortedISOList.map(t => formatDateTime(t));
+
+    // 5. 填補連續數據（若某個時間點沒紀錄，沿用前一個數值，保持線條連續且右側平齊）
+    let datasets = [];
+    const itemsToDisplay = selectedId === 'ALL' 
+      ? processedItems 
+      : processedItems.filter(i => i.id === selectedId);
+
+    datasets = itemsToDisplay.map((item, idx) => {
+      const color = selectedId === 'ALL' 
+        ? CHART_COLORS[idx % CHART_COLORS.length] 
+        : '#ff0000';
+
+      let lastVal = null;
+      const alignedData = sortedISOList.map(iso => {
+        if (item.historyMap.has(iso)) {
+          lastVal = item.historyMap.get(iso);
+        }
+        return lastVal;
+      });
+
+      return {
+        label: item.title,
+        data: alignedData,
+        borderColor: color,
+        backgroundColor: selectedId === 'ALL' ? color : 'rgba(255, 0, 0, 0.1)',
+        fill: selectedId !== 'ALL',
+        tension: 0.1,
+        spanGaps: true
+      };
+    });
 
     chartInstance.data.labels = labels;
     chartInstance.data.datasets = datasets;
