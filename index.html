@@ -845,13 +845,18 @@ function updateChart() {
       return;
     }
 
-    // 1. 處理所有項目的歷史數據
+    // 1. 處理數據並紀錄推出時間點與實際紀錄時間點
     const processedItems = trackedItems.map(item => {
       let combinedHistory = [...(item.history || [])];
+      let pubTimeISO = null;
+
       if (includePublishDate && item.publishedAt) {
-        combinedHistory.push({ timestamp: item.publishedAt, views: 0 });
+        const d = new Date(item.publishedAt);
+        d.setSeconds(0, 0);
+        pubTimeISO = d.toISOString();
       }
-      return { ...item, combinedHistory };
+
+      return { ...item, combinedHistory, pubTimeISO };
     });
 
     // 2. 找出全域最新時間戳記
@@ -863,19 +868,34 @@ function updateChart() {
       });
     });
 
-    // 3. 收集所有時間點，並將秒數歸零（去重），避免產生重複的刻度標記
+    // 3. 建立時間地圖與統一時間集合
     const timeSet = new Set();
-    
-    // 強制包含全域最新時間
-    const maxTimeISO = new Date(maxTimestamp).toISOString();
+    const maxDate = new Date(maxTimestamp);
+    maxDate.setSeconds(0, 0);
+    const maxMinISO = maxDate.toISOString();
 
     processedItems.forEach(item => {
       item.historyMap = new Map();
-      
-      // 依時間排序
       item.combinedHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-      // 將時間簡化至「分」來去重
+      // 找出第一次實際紀錄的時間
+      let firstRealTimeISO = null;
+      if (item.combinedHistory.length > 0) {
+        const fd = new Date(item.combinedHistory[0].timestamp);
+        fd.setSeconds(0, 0);
+        firstRealTimeISO = fd.toISOString();
+      }
+
+      // 若勾選推出日期且有發布時間
+      if (item.pubTimeISO) {
+        // 當發布時間早於或等於第一次紀錄時，才在推出日設 0
+        if (!firstRealTimeISO || item.pubTimeISO <= firstRealTimeISO) {
+          item.historyMap.set(item.pubTimeISO, 0);
+          timeSet.add(item.pubTimeISO);
+        }
+      }
+
+      // 紀錄實際抓到的觀看量歷史點
       item.combinedHistory.forEach(h => {
         const d = new Date(h.timestamp);
         d.setSeconds(0, 0);
@@ -884,14 +904,10 @@ function updateChart() {
         timeSet.add(minISO);
       });
 
-      // 補齊最後一個最新時間點，確保右側延伸平齊
+      // 補齊最後一個最新時間點，使右側對齊
       const lastViews = item.combinedHistory.length > 0 
         ? item.combinedHistory[item.combinedHistory.length - 1].views 
         : 0;
-      
-      const maxDate = new Date(maxTimestamp);
-      maxDate.setSeconds(0, 0);
-      const maxMinISO = maxDate.toISOString();
 
       if (!item.historyMap.has(maxMinISO)) {
         item.historyMap.set(maxMinISO, lastViews);
@@ -899,26 +915,49 @@ function updateChart() {
       timeSet.add(maxMinISO);
     });
 
-    // 4. 建立統一排序的 X 軸標籤
+    // 4. X 軸標籤排序
     const sortedISOList = Array.from(timeSet).sort((a, b) => new Date(a) - new Date(b));
     const labels = sortedISOList.map(t => formatDateTime(t));
 
-    // 5. 填補連續數據（若某個時間點沒紀錄，沿用前一個數值，保持線條連續且右側平齊）
-    let datasets = [];
+    // 5. 繪製折線圖
     const itemsToDisplay = selectedId === 'ALL' 
       ? processedItems 
       : processedItems.filter(i => i.id === selectedId);
 
-    datasets = itemsToDisplay.map((item, idx) => {
+    const datasets = itemsToDisplay.map((item, idx) => {
       const color = selectedId === 'ALL' 
         ? CHART_COLORS[idx % CHART_COLORS.length] 
         : '#ff0000';
 
       let lastVal = null;
+      let hasReachedFirstRecord = false;
+
+      // 找出該項目第一次實際紀錄的時間點
+      let firstRecordISO = null;
+      if (item.combinedHistory && item.combinedHistory.length > 0) {
+        const fd = new Date(item.combinedHistory[0].timestamp);
+        fd.setSeconds(0, 0);
+        firstRecordISO = fd.toISOString();
+      }
+
       const alignedData = sortedISOList.map(iso => {
+        // 如果該時間點有確切數值（包含推出日的 0、實際紀錄點、最後對齊點）
         if (item.historyMap.has(iso)) {
-          lastVal = item.historyMap.get(iso);
+          const val = item.historyMap.get(iso);
+          if (iso === firstRecordISO) {
+            hasReachedFirstRecord = true;
+          }
+          lastVal = val;
+          return val;
         }
+
+        // 在「推出日」與「第一次實際紀錄」之間的時間點填入 null
+        // 配合 spanGaps: true，Chart.js 會直接從 0 連一條直線到第一個數據點
+        if (item.pubTimeISO && iso > item.pubTimeISO && !hasReachedFirstRecord) {
+          return null;
+        }
+
+        // 第一次實際紀錄之後的時間點，若中間無紀錄則沿用前值
         return lastVal;
       });
 
@@ -929,7 +968,7 @@ function updateChart() {
         backgroundColor: selectedId === 'ALL' ? color : 'rgba(255, 0, 0, 0.1)',
         fill: selectedId !== 'ALL',
         tension: 0.1,
-        spanGaps: true
+        spanGaps: true // 跨越 null 點，將 0 與第一次紀錄點拉出直線
       };
     });
 
