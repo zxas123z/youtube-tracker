@@ -464,6 +464,11 @@
     '#6f42c1', '#fd7e14', '#e83e8c', '#20c997', '#343a40'
   ];
 
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     const savedKey = localStorage.getItem('ytApiKey');
     if (savedKey) {
@@ -715,21 +720,6 @@
     }
 
     listEl.innerHTML = itemsToRender.map(item => {
-function renderList() {
-    const listEl = document.getElementById('trackList');
-    const sortType = document.getElementById('sortSelect').value;
-
-    let itemsToRender = [...trackedItems];
-    if (sortType === 'views-desc') itemsToRender.sort((a, b) => b.views - a.views);
-    else if (sortType === 'views-asc') itemsToRender.sort((a, b) => a.views - b.views);
-    else if (sortType === 'title-asc') itemsToRender.sort((a, b) => a.title.localeCompare(b.title));
-
-    if (itemsToRender.length === 0) {
-      listEl.innerHTML = '<p style="color:#6c757d; text-align:center;">尚無追蹤項目</p>';
-      return;
-    }
-
-    listEl.innerHTML = itemsToRender.map(item => {
       const likes = item.likes || 0;
       const comments = item.comments || 0;
       const views = item.views || 0;
@@ -767,6 +757,7 @@ function renderList() {
       `;
     }).join('');
   }
+
   function updateChartSelectOptions() {
     const select = document.getElementById('chartItemSelect');
     const currentValue = select.value;
@@ -1007,25 +998,24 @@ function renderList() {
         importedData.forEach(newItem => {
           if (!newItem.id || !newItem.title) return;
           const index = trackedItems.findIndex(i => i.id === newItem.id);
-          if (index > -1) trackedItems[index] = newItem;
-          else trackedItems.push(newItem);
+          if (index > -1) {
+            trackedItems[index] = newItem;
+          } else {
+            trackedItems.push(newItem);
+          }
         });
 
         saveData();
         renderList();
         updateChartSelectOptions();
         updateChartAndAnalytics();
-        alert('匯入成功！');
+        alert('成功匯入數據');
       } catch (err) {
-        alert('解析失敗');
+        alert('解析 JSON 檔案失敗');
       }
-      event.target.value = '';
     };
     reader.readAsText(file);
-  }
-
-  function escapeHtml(str) {
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    event.target.value = '';
   }
 </script>
 </body>
