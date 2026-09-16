@@ -452,7 +452,7 @@
           <img src="${item.thumbnail}" alt="縮圖">
           <div class="item-details">
             <a class="item-title" href="https://www.youtube.com/watch?v=${item.id}" target="_blank">${escapeHtml(item.title)}</a>
-            <div class="item-stats">播放量：${item.views.toLocaleString()} 次 (最後更新：${formatHour(item.updatedAt)})</div>
+            <div class="item-stats">播放量：${item.views.toLocaleString()} 次 (最後更新：${new Date(item.updatedAt).toLocaleString()})</div>
           </div>
         </div>
         <div class="action-buttons">
@@ -481,12 +481,40 @@
     }
   }
 
-  function formatHour(isoString) {
+  // 格式化日期時間（顯示月/日 時:分）
+  function formatDateTime(isoString) {
     const d = new Date(isoString);
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const date = String(d.getDate()).padStart(2, '0');
     const hours = String(d.getHours()).padStart(2, '0');
-    return `${month}/${date} ${hours}:00`;
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${month}/${date} ${hours}:${minutes}`;
+  }
+
+  // 自動過濾/合併變化量過小的數據點
+  function filterSignificantHistory(history) {
+    if (!history || history.length === 0) return [];
+    if (history.length <= 2) return history;
+
+    const filtered = [history[0]];
+    let lastRecorded = history[0];
+
+    for (let i = 1; i < history.length - 1; i++) {
+      const current = history[i];
+      const viewsDiff = Math.abs(current.views - lastRecorded.views);
+      
+      // 合併條件：變化量大於 10 次，或是變化比例大於 0.1%
+      const minThreshold = Math.max(10, lastRecorded.views * 0.001);
+
+      if (viewsDiff >= minThreshold) {
+        filtered.push(current);
+        lastRecorded = current;
+      }
+    }
+
+    // 始終保留最後一個最新數據點
+    filtered.push(history[history.length - 1]);
+    return filtered;
   }
 
   function initChart() {
@@ -502,7 +530,7 @@
         maintainAspectRatio: false,
         scales: {
           x: {
-            title: { display: true, text: '時間 (小時)' }
+            title: { display: true, text: '時間' }
           },
           y: {
             title: { display: true, text: '播放次數' },
@@ -530,20 +558,26 @@
       return;
     }
 
+    // 取得經優化過濾後的數據點
+    const processedItems = trackedItems.map(item => ({
+      ...item,
+      history: filterSignificantHistory(item.history)
+    }));
+
     let allTimestamps = new Set();
-    trackedItems.forEach(item => {
+    processedItems.forEach(item => {
       if (item.history) {
         item.history.forEach(h => allTimestamps.add(h.timestamp));
       }
     });
 
     const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => new Date(a) - new Date(b));
-    const labels = sortedTimestamps.map(t => formatHour(t));
+    const labels = sortedTimestamps.map(t => formatDateTime(t));
 
     let datasets = [];
 
     if (selectedId === 'ALL') {
-      datasets = trackedItems.map((item, idx) => {
+      datasets = processedItems.map((item, idx) => {
         const color = CHART_COLORS[idx % CHART_COLORS.length];
         const dataMap = new Map((item.history || []).map(h => [h.timestamp, h.views]));
         const data = sortedTimestamps.map(ts => dataMap.get(ts) ?? null);
@@ -559,7 +593,7 @@
         };
       });
     } else {
-      const item = trackedItems.find(i => i.id === selectedId);
+      const item = processedItems.find(i => i.id === selectedId);
       if (item && item.history) {
         const dataMap = new Map(item.history.map(h => [h.timestamp, h.views]));
         const data = sortedTimestamps.map(ts => dataMap.get(ts) ?? null);
