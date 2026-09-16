@@ -3,448 +3,220 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YouTube 播放量追蹤器</title>
+  <title>YouTube 數據追蹤器</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    :root {
-      --primary-color: #ff0000;
-      --bg-color: #f8f9fa;
-      --card-bg: #ffffff;
-      --text-color: #333333;
-      --border-color: #e9ecef;
-    }
-
     * {
       box-sizing: border-box;
-    }
-
-    body {
+      margin: 0;
+      padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      margin: 0;
-      padding: 15px;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
     }
-
-    .dashboard-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 15px;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: 1.5rem;
-    }
-
-    .top-controls {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .dashboard-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: auto 1fr;
-      gap: 15px;
-      flex: 1;
-      min-height: 0;
-    }
-
-    .card {
-      background-color: var(--card-bg);
-      border-radius: 8px;
+    body {
+      background-color: #f5f5f7;
+      color: #333;
       padding: 16px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
+      max-width: 800px;
+      margin: 0 auto;
     }
-
-    .card h2 {
-      margin-top: 0;
-      font-size: 1.1rem;
-      border-bottom: 2px solid var(--border-color);
-      padding-bottom: 8px;
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    h2 {
+      font-size: 1.2rem;
       margin-bottom: 12px;
     }
-
-    .card-full {
-      grid-column: 1 / -1;
-    }
-
-    .add-mode-container {
-      display: flex;
-      gap: 15px;
-      align-items: center;
-    }
-
     .input-group {
       display: flex;
       gap: 8px;
+      margin-bottom: 12px;
+    }
+    input[type="text"] {
       flex: 1;
-    }
-
-    input[type="text"], input[type="password"], select {
-      flex: 1;
-      padding: 8px 12px;
-      border: 1px solid #ced4da;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-
-    button {
-      background-color: var(--primary-color);
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
-      white-space: nowrap;
-      transition: background-color 0.2s;
-    }
-
-    button:hover { background-color: #cc0000; }
-    button.btn-secondary { background-color: #6c757d; }
-    button.btn-secondary:hover { background-color: #5a6268; }
-    button.btn-danger { background-color: #dc3545; }
-    button.btn-danger:hover { background-color: #bd2130; }
-
-    .tab-group {
-      display: flex;
-      gap: 6px;
-    }
-
-    .tab-btn {
-      background-color: #e9ecef;
-      color: #495057;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 13px;
-    }
-
-    .tab-btn.active {
-      background-color: var(--primary-color);
-      color: white;
-    }
-
-    .search-results {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 10px;
-      max-height: 150px;
-      overflow-y: auto;
-    }
-
-    .search-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border: 1px solid var(--border-color);
-      padding: 6px 10px;
-      border-radius: 6px;
-      background: #fafafa;
-    }
-
-    .search-item-info {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex: 1;
-    }
-
-    .search-item-info img {
-      width: 50px;
-      height: 38px;
-      border-radius: 4px;
-      object-fit: cover;
-    }
-
-    .search-item-title { font-size: 13px; font-weight: 600; }
-    .search-item-channel { font-size: 11px; color: #6c757d; }
-
-    .controls-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-
-    .chart-controls {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      max-width: 60%;
-    }
-
-    .checkbox-label {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 12px;
-      color: #495057;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-
-    .status-bar {
-      font-size: 12px;
-      color: #6c757d;
-      margin-bottom: 10px;
-      padding: 6px 10px;
-      background-color: #e9ecef;
-      border-radius: 4px;
-    }
-
-    .item-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      overflow-y: auto;
-      flex: 1;
-    }
-
-    .item-card {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border: 1px solid var(--border-color);
       padding: 10px;
+      border: 1px solid #ccc;
       border-radius: 6px;
-      background-color: #fff;
+      font-size: 0.95rem;
     }
-
-    .item-info {
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      background-color: #555;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #333;
+    }
+    .btn-red {
+      background-color: #dc3545;
+    }
+    .btn-red:hover {
+      background-color: #bd2130;
+    }
+    .btn-group {
       display: flex;
-      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .video-item {
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      display: flex;
       gap: 12px;
-      flex: 1;
+      position: relative;
     }
-
-    .item-info img {
-      width: 70px;
-      height: 52px;
-      border-radius: 4px;
+    .video-item img {
+      width: 100px;
+      height: 60px;
       object-fit: cover;
+      border-radius: 4px;
     }
-
-    .item-details {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+    .video-info {
       flex: 1;
     }
-
-    .item-title {
-      font-weight: 600;
-      text-decoration: none;
-      color: var(--text-color);
-      font-size: 14px;
+    .video-title {
+      font-weight: bold;
+      font-size: 0.95rem;
+      margin-bottom: 4px;
     }
-
-    .item-title:hover { color: var(--primary-color); }
-    .channel-name { font-size: 12px; color: #495057; }
-
-    .stats-badge-container {
+    .video-channel {
+      font-size: 0.8rem;
+      color: #666;
+      margin-bottom: 4px;
+    }
+    .video-meta {
+      font-size: 0.75rem;
+      color: #888;
+      margin-bottom: 8px;
+    }
+    .stats-tags {
       display: flex;
-      gap: 6px;
       flex-wrap: wrap;
+      gap: 6px;
+      font-size: 0.8rem;
     }
-
-    .badge {
-      background-color: #f1f3f5;
+    .tag {
+      background: #eef2ff;
+      color: #3730a3;
       padding: 2px 6px;
       border-radius: 4px;
-      font-size: 11px;
-      color: #333;
     }
-
-    .badge-highlight {
-      background-color: #e7f5ff;
-      color: #1971c2;
-      font-weight: 600;
+    .delete-btn {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      padding: 4px 8px;
+      font-size: 0.75rem;
     }
-
-    .analytics-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin-bottom: 10px;
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
     }
-
-    .analytics-box {
-      background-color: #f1f3f5;
-      padding: 10px;
+    select {
+      padding: 6px 12px;
       border-radius: 6px;
-      border-left: 3px solid var(--primary-color);
+      border: 1px solid #ccc;
     }
-
-    .analytics-box .title { font-size: 11px; color: #6c757d; }
-    .analytics-box .value { font-size: 14px; font-weight: bold; color: var(--text-color); }
-
+    /* 修改容器高度：確保手機直向時圖表不會太扁 */
     .chart-container {
       position: relative;
-      flex: 1;
-      min-height: 0;
+      width: 100%;
+      height: 380px;
     }
-
-    .export-import-group {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-    }
-
-    @media (max-width: 768px) {
-      body {
-        height: auto;
-        overflow-y: auto;
-      }
-
-      .dashboard-grid {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto;
-        overflow: visible;
-      }
-
-      .dashboard-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-      }
-
-      .top-controls {
-        width: 100%;
-      }
-
-      .top-controls input[type="password"] {
-        flex: 1;
-        width: auto !important;
-      }
-
-      .add-mode-container {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      .analytics-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-
-      .item-list {
-        max-height: 400px;
-      }
-
+    @media (min-width: 768px) {
       .chart-container {
-        height: 300px;
+        height: 450px;
       }
-
-      .chart-controls {
-        max-width: 100%;
-        flex-direction: column;
-        align-items: flex-end;
-      }
+    }
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .analytic-card {
+      background: #f8f9fa;
+      border-left: 4px solid #dc3545;
+      padding: 8px 12px;
+      border-radius: 4px;
+    }
+    .analytic-label {
+      font-size: 0.75rem;
+      color: #666;
+    }
+    .analytic-value {
+      font-size: 1.1rem;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
 
-<div class="dashboard-header">
-  <h1>YouTube 播放量追蹤儀表板</h1>
-  <div class="top-controls">
-    <input type="password" id="apiKeyInput" value="000" placeholder="API Key" style="width: 250px;">
-    <button onclick="saveApiKey()">儲存 Key</button>
-  </div>
-</div>
-
-<div class="dashboard-grid">
-  <div class="card card-full">
-    <div class="add-mode-container">
-      <div class="tab-group">
-        <button class="tab-btn active" id="tabUrlBtn" onclick="switchAddTab('url')">網址/ID 新增</button>
-        <button class="tab-btn" id="tabSearchBtn" onclick="switchAddTab('search')">關鍵字搜尋</button>
-      </div>
-
-      <div id="urlModeSection" style="flex: 1;">
-        <div class="input-group">
-          <input type="text" id="targetInput" placeholder="輸入 YouTube 影片網址或 ID">
-          <button onclick="addTrackItem()">查詢並追蹤</button>
-        </div>
-      </div>
-
-      <div id="searchModeSection" style="flex: 1; display: none;">
-        <div class="input-group">
-          <input type="text" id="searchInput" placeholder="輸入歌曲或影片名稱關鍵字..." onkeypress="if(event.key==='Enter') searchYoutube()">
-          <button onclick="searchYoutube()">搜尋</button>
-        </div>
-      </div>
-    </div>
-    <div id="searchResults" class="search-results"></div>
-  </div>
-
   <div class="card">
-    <div class="controls-header">
-      <h2>追蹤列表</h2>
-      <div style="display: flex; gap: 6px; align-items: center;">
-        <button class="btn-secondary" style="padding: 4px 8px; font-size: 12px;" onclick="manualRefreshAll()">即時更新</button>
-        <select id="sortSelect" onchange="renderList()" style="padding: 4px 8px; font-size: 12px; width: auto;">
-          <option value="default">預設</option>
-          <option value="views-desc">播放量↓</option>
-          <option value="views-asc">播放量↑</option>
-          <option value="title-asc">標題 A-Z</option>
-        </select>
-      </div>
-    </div>
-    <div class="status-bar" id="statusBar">自動更新：10 分鐘</div>
-    
-    <div id="trackList" class="item-list"></div>
-
-    <div class="export-import-group">
-      <button class="btn-secondary" style="font-size: 12px; padding: 6px 10px;" onclick="exportData('json')">匯出 JSON</button>
-      <button class="btn-secondary" style="font-size: 12px; padding: 6px 10px;" onclick="exportData('csv')">匯出 CSV</button>
-      <button class="btn-secondary" style="font-size: 12px; padding: 6px 10px;" onclick="document.getElementById('importFileInput').click()">匯入 JSON</button>
-      <input type="file" id="importFileInput" accept=".json" style="display: none;" onchange="importData(event)">
+    <h2>API Key 設定</h2>
+    <div class="input-group">
+      <input type="text" id="apiKeyInput" placeholder="請輸入 YouTube API Key">
+      <button onclick="saveApiKey()">儲存</button>
     </div>
   </div>
 
   <div class="card">
-    <div class="controls-header">
+    <h2>新增追蹤影片</h2>
+    <div class="input-group">
+      <input type="text" id="targetInput" placeholder="輸入影片 ID 或 URL">
+      <button onclick="addVideo()">新增</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>追蹤清單</h2>
+    <div id="videoList"></div>
+    <div class="btn-group">
+      <button onclick="exportJSON()">匯出 JSON</button>
+      <button onclick="exportCSV()">匯出 CSV</button>
+      <button onclick="importJSON()">匯入 JSON</button>
+      <input type="file" id="importFileInput" style="display: none;" onchange="handleFileImport(event)">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="chart-header">
       <h2>圖表分析</h2>
-      <div class="chart-controls">
-        <label class="checkbox-label">
-          <input type="checkbox" id="includePublishDateCheckbox" onchange="updateChartAndAnalytics()">
-          包含推出日期
-        </label>
-        <select id="chartItemSelect" onchange="updateChartAndAnalytics()" style="padding: 4px 8px; font-size: 12px; width: 180px;">
-          <option value="ALL">顯示所有項目</option>
-        </select>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label><input type="checkbox" id="includePublishDateCheckbox" onchange="updateChartAndAnalytics()" checked> 包含推出日期</label>
+        <select id="chartItemSelect" onchange="updateChart()"></select>
       </div>
     </div>
-    
-    <div class="analytics-grid" id="analyticsDashboard">
-      <div class="analytics-box">
-        <div class="title">總追蹤</div>
-        <div class="value" id="statTotalItems">0</div>
+
+    <div class="analytics-grid">
+      <div class="analytic-card">
+        <div class="analytic-label">總追蹤</div>
+        <div class="analytic-value" id="statTotalTracked">0</div>
       </div>
-      <div class="analytics-box">
-        <div class="title">總播放量</div>
-        <div class="value" id="statTotalViews">0</div>
+      <div class="analytic-card">
+        <div class="analytic-label">總播放量</div>
+        <div class="analytic-value" id="statTotalViews">0</div>
       </div>
-      <div class="analytics-box">
-        <div class="title">每小時增長</div>
-        <div class="value" id="statHourlyGrowth">0 / hr</div>
+      <div class="analytic-card">
+        <div class="analytic-label">每小時增長</div>
+        <div class="analytic-value" id="statHourlyGrowth">+0 / hr</div>
       </div>
-      <div class="analytics-box">
-        <div class="title">最高播放</div>
-        <div class="value" id="statTopItem" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">-</div>
+      <div class="analytic-card">
+        <div class="analytic-label">最高播放</div>
+        <div class="analytic-value" id="statTopVideo">-</div>
       </div>
     </div>
 
@@ -452,658 +224,461 @@
       <canvas id="viewsChart"></canvas>
     </div>
   </div>
-</div>
 
-<script>
-  let trackedItems = JSON.parse(localStorage.getItem('trackedItems') || '[]');
-  let chartInstance = null;
-  const AUTO_REFRESH_INTERVAL = 10 * 60 * 1000;
+  <script>
+    const STORAGE_KEY_ITEMS = 'yt_tracked_items';
+    const STORAGE_KEY_API = 'yt_api_key';
 
-  const CHART_COLORS = [
-    '#ff0000', '#007bff', '#28a745', '#ffc107', '#17a2b8', 
-    '#6f42c1', '#fd7e14', '#e83e8c', '#20c997', '#343a40'
-  ];
+    const CHART_COLORS = [
+      '#ff0000', '#007bff', '#28a745', '#ffc107', 
+      '#17a2b8', '#6f42c1', '#fd7e14', '#e83e8c'
+    ];
 
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-  }
+    let trackedItems = [];
+    let apiKey = '';
+    let chartInstance = null;
 
-  document.addEventListener('DOMContentLoaded', () => {
-    const savedKey = localStorage.getItem('ytApiKey');
-    if (savedKey) {
-      document.getElementById('apiKeyInput').value = savedKey;
-    }
-    renderList();
-    updateChartSelectOptions();
-    initChart();
-    startAutoRefresh();
-  });
+    window.onload = function() {
+      apiKey = localStorage.getItem(STORAGE_KEY_API) || '';
+      document.getElementById('apiKeyInput').value = apiKey;
 
-  function saveApiKey() {
-    const key = document.getElementById('apiKeyInput').value.trim();
-    if (!key) return alert('請輸入有效的 API Key');
-    localStorage.setItem('ytApiKey', key);
-    alert('API Key 已儲存！');
-  }
-
-  function getApiKey() {
-    return localStorage.getItem('ytApiKey') || document.getElementById('apiKeyInput').value.trim();
-  }
-
-  function switchAddTab(mode) {
-    const urlSection = document.getElementById('urlModeSection');
-    const searchSection = document.getElementById('searchModeSection');
-    const urlBtn = document.getElementById('tabUrlBtn');
-    const searchBtn = document.getElementById('tabSearchBtn');
-    const searchResults = document.getElementById('searchResults');
-
-    searchResults.innerHTML = '';
-
-    if (mode === 'url') {
-      urlSection.style.display = 'block';
-      searchSection.style.display = 'none';
-      urlBtn.classList.add('active');
-      searchBtn.classList.remove('active');
-    } else {
-      urlSection.style.display = 'none';
-      searchSection.style.display = 'block';
-      searchBtn.classList.add('active');
-      urlBtn.classList.remove('active');
-    }
-  }
-
-  async function searchYoutube() {
-    const apiKey = getApiKey();
-    if (!apiKey) return alert('請先設定 API Key！');
-
-    const query = document.getElementById('searchInput').value.trim();
-    if (!query) return alert('請輸入搜尋關鍵字');
-
-    const resultsContainer = document.getElementById('searchResults');
-    resultsContainer.innerHTML = '<p style="color:#6c757d; text-align:center; margin:5px 0;">搜尋中...</p>';
-
-    try {
-      const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=5&q=${encodeURIComponent(query)}&key=${apiKey}`);
-      const data = await res.json();
-
-      if (!data.items || data.items.length === 0) {
-        resultsContainer.innerHTML = '<p style="color:#6c757d; text-align:center; margin:5px 0;">找不到相關結果</p>';
-        return;
+      const savedData = localStorage.getItem(STORAGE_KEY_ITEMS);
+      if (savedData) {
+        try {
+          trackedItems = JSON.parse(savedData);
+        } catch(e) {
+          trackedItems = [];
+        }
       }
 
-      resultsContainer.innerHTML = data.items.map(item => {
-        const videoId = item.id.videoId;
-        const title = escapeHtml(item.snippet.title);
-        const channel = escapeHtml(item.snippet.channelTitle);
-        const thumb = item.snippet.thumbnails.default ? item.snippet.thumbnails.default.url : '';
-        const isTracked = trackedItems.some(i => i.id === videoId);
-
-        return `
-          <div class="search-item">
-            <div class="search-item-info">
-              <img src="${thumb}" alt="縮圖">
-              <div>
-                <div class="search-item-title">${title}</div>
-                <div class="search-item-channel">${channel}</div>
-              </div>
-            </div>
-            <button class="${isTracked ? 'btn-secondary' : ''}" style="padding: 4px 8px; font-size: 12px;"
-                    onclick="addTrackItemById('${videoId}')" 
-                    ${isTracked ? 'disabled' : ''}>
-              ${isTracked ? '已追蹤' : '加入追蹤'}
-            </button>
-          </div>
-        `;
-      }).join('');
-    } catch (e) {
-      resultsContainer.innerHTML = '<p style="color:red; text-align:center; margin:5px 0;">搜尋失敗，請檢查 API Key 或網路狀況</p>';
-    }
-  }
-
-  async function addTrackItemById(videoId) {
-    const apiKey = getApiKey();
-    if (!apiKey) return alert('請先設定 API Key！');
-    await fetchVideoData(videoId, apiKey);
-    
-    const searchInput = document.getElementById('searchInput').value.trim();
-    if (searchInput) {
-      searchYoutube();
-    }
-  }
-
-  async function addTrackItem() {
-    const apiKey = getApiKey();
-    if (!apiKey) return alert('請先設定 API Key！');
-
-    const input = document.getElementById('targetInput').value.trim();
-    if (!input) return alert('請輸入網址或 ID');
-
-    let videoId = extractVideoId(input);
-    if (videoId) {
-      await fetchVideoData(videoId, apiKey);
-    } else {
-      alert('無法解析影片 ID');
-    }
-  }
-
-  function extractVideoId(url) {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : (url.length === 11 ? url : null);
-  }
-
-async function fetchVideoData(id, key, silent = false) {
-    try {
-      const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${id}&key=${key}`);
-      const data = await res.json();
-      
-      if (data.error) {
-        if (!silent) alert(`API 錯誤 (${data.error.code})：${data.error.message}`);
-        return;
-      }
-
-      if (!data.items || data.items.length === 0) {
-        if (!silent) alert('找不到該影片數據，請確認 ID 是否正確');
-        return;
-      }
-
-      const item = data.items[0];
-      const now = new Date().toISOString();
-      const currentViews = parseInt(item.statistics.viewCount || 0, 10);
-      const likes = parseInt(item.statistics.likeCount || 0, 10);
-      const comments = parseInt(item.statistics.commentCount || 0, 10);
-      const channelTitle = item.snippet.channelTitle || '未知頻道';
-      const publishedAt = item.snippet.publishedAt;
-
-      const existingIndex = trackedItems.findIndex(i => i.id === item.id);
-      
-      if (existingIndex > -1) {
-        trackedItems[existingIndex].title = item.snippet.title;
-        trackedItems[existingIndex].thumbnail = item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : item.snippet.thumbnails.default.url;
-        trackedItems[existingIndex].views = currentViews;
-        trackedItems[existingIndex].likes = likes;
-        trackedItems[existingIndex].comments = comments;
-        trackedItems[existingIndex].channelTitle = channelTitle;
-        trackedItems[existingIndex].publishedAt = publishedAt;
-        trackedItems[existingIndex].updatedAt = now;
-        
-        if (!trackedItems[existingIndex].history) trackedItems[existingIndex].history = [];
-        trackedItems[existingIndex].history.push({ timestamp: now, views: currentViews });
-      } else {
-        trackedItems.push({
-          id: item.id,
-          title: item.snippet.title,
-          thumbnail: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : item.snippet.thumbnails.default.url,
-          views: currentViews,
-          likes: likes,
-          comments: comments,
-          channelTitle: channelTitle,
-          publishedAt: publishedAt,
-          updatedAt: now,
-          history: [{ timestamp: now, views: currentViews }]
-        });
-      }
-
-      saveData();
+      initChart();
       renderList();
-      if (typeof updateChartSelectOptions === 'function') updateChartSelectOptions();
-      
-      // 避免圖表或分析函數拋出錯誤導致彈出失敗提示
+      updateChartSelectOptions();
+      updateChartAndAnalytics();
+    };
+
+    function saveApiKey() {
+      apiKey = document.getElementById('apiKeyInput').value.trim();
+      localStorage.setItem(STORAGE_KEY_API, apiKey);
+      alert('API Key 已儲存');
+    }
+
+    function extractVideoId(input) {
+      input = input.trim();
+      if (input.length === 11) return input;
+      const match = input.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+      return match ? match[1] : null;
+    }
+
+    async function addVideo() {
+      if (!apiKey) {
+        alert('請先設定 API Key');
+        return;
+      }
+      const input = document.getElementById('targetInput').value;
+      const videoId = extractVideoId(input);
+      if (!videoId) {
+        alert('無效的影片 ID 或網址');
+        return;
+      }
+
+      await fetchVideoData(videoId, apiKey);
+    }
+
+    async function fetchVideoData(id, key, silent = false) {
       try {
-        if (typeof updateChart === 'function') updateChart();
-        if (typeof updateAnalytics === 'function') updateAnalytics();
-      } catch (chartErr) {
-        console.error("更新圖表或分析時出錯：", chartErr);
-      }
-
-      document.getElementById('targetInput').value = '';
-    } catch (e) {
-      if (!silent) alert(`獲取數據失敗：${e.message}`);
-    }
-  }
-
-  async function manualRefreshAll() {
-    const apiKey = getApiKey();
-    if (!apiKey) return alert('請先設定 API Key！');
-    if (trackedItems.length === 0) return alert('尚無追蹤項目');
-
-    const statusBar = document.getElementById('statusBar');
-    statusBar.innerText = '更新中...';
-
-    for (const item of trackedItems) {
-      await fetchVideoData(item.id, apiKey, true);
-    }
-
-    const now = new Date().toLocaleTimeString();
-    statusBar.innerText = `最後更新：${now}`;
-  }
-
-  function saveData() {
-    localStorage.setItem('trackedItems', JSON.stringify(trackedItems));
-  }
-
-  function deleteItem(id) {
-    if (!confirm('確定刪除？')) return;
-    trackedItems = trackedItems.filter(item => item.id !== id);
-    saveData();
-    renderList();
-    SelectOptions();
-    AndAnalytics();
-  }
-
-  function calculateDailyAverage(views, publishedAt) {
-    if (!publishedAt) return 0;
-    const pubDate = new Date(publishedAt);
-    const now = new Date();
-    const diffTime = Math.max(now - pubDate, 1000 * 60 * 60 * 24);
-    return Math.round(views / (diffTime / (1000 * 60 * 60 * 24)));
-  }
-
-  function calculate24hGrowth(history) {
-    if (!history || history.length < 2) return 0;
-    const latest = history[history.length - 1];
-    const target24hTime = new Date(latest.timestamp).getTime() - (24 * 60 * 60 * 1000);
-
-    let closest = history[0];
-    let minDiff = Math.abs(new Date(closest.timestamp).getTime() - target24hTime);
-
-    for (let i = 1; i < history.length - 1; i++) {
-      const diff = Math.abs(new Date(history[i].timestamp).getTime() - target24hTime);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closest = history[i];
-      }
-    }
-    return Math.max(0, latest.views - closest.views);
-  }
-
-  function renderList() {
-    const listEl = document.getElementById('trackList');
-    const sortType = document.getElementById('sortSelect').value;
-
-    let itemsToRender = [...trackedItems];
-    if (sortType === 'views-desc') itemsToRender.sort((a, b) => b.views - a.views);
-    else if (sortType === 'views-asc') itemsToRender.sort((a, b) => a.views - b.views);
-    else if (sortType === 'title-asc') itemsToRender.sort((a, b) => a.title.localeCompare(b.title));
-
-    if (itemsToRender.length === 0) {
-      listEl.innerHTML = '<p style="color:#6c757d; text-align:center;">尚無追蹤項目</p>';
-      return;
-    }
-
-    listEl.innerHTML = itemsToRender.map(item => {
-      const likes = item.likes || 0;
-      const comments = item.comments || 0;
-      const views = item.views || 0;
-      const engagementRate = views > 0 ? (((likes + comments) / views) * 100).toFixed(2) : '0.00';
-      const dailyAvg = calculateDailyAverage(views, item.publishedAt);
-      const growth24h = calculate24hGrowth(item.history);
-
-      const pubDate = item.publishedAt ? new Date(item.publishedAt) : null;
-      const publishedDateStr = pubDate ? pubDate.toLocaleDateString() : '未知';
-      const daysPublished = pubDate ? Math.max(0, Math.floor((new Date() - pubDate) / (1000 * 60 * 60 * 24))) : 0;
-      const lastUpdateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleTimeString() : '未知';
-
-      return `
-        <div class="item-card">
-          <div class="item-info">
-            <img src="${item.thumbnail}" alt="縮圖">
-            <div class="item-details">
-              <a class="item-title" href="https://www.youtube.com/watch?v=${item.id}" target="_blank">${escapeHtml(item.title)}</a>
-              <div class="channel-name">${escapeHtml(item.channelTitle || '未知')}</div>
-              <div class="item-meta" style="font-size: 11px; color: #6c757d; margin: 2px 0;">
-                <span>發布日期：${publishedDateStr} (${daysPublished} 天前)</span> | 
-                <span>最後更新：${lastUpdateStr}</span>
-              </div>
-              <div class="stats-badge-container">
-                <span class="badge badge-highlight">觀看：${views.toLocaleString()}</span>
-                <span class="badge">讚：${likes.toLocaleString()}</span>
-                <span class="badge">互動：${engagementRate}%</span>
-                <span class="badge">日均：${dailyAvg.toLocaleString()}</span>
-                <span class="badge">24h：+${growth24h.toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-          <button class="btn-danger" style="padding: 4px 8px; font-size: 12px;" onclick="deleteItem('${item.id}')">刪除</button>
-        </div>
-      `;
-    }).join('');
-  }
-
-  function updateChartSelectOptions() {
-    const select = document.getElementById('chartItemSelect');
-    const currentValue = select.value;
-    select.innerHTML = '<option value="ALL">顯示所有項目</option>';
-    
-    trackedItems.forEach(item => {
-      const opt = document.createElement('option');
-      opt.value = item.id;
-      opt.textContent = item.title;
-      select.appendChild(opt);
-    });
-
-    if (currentValue && (currentValue === 'ALL' || trackedItems.some(i => i.id === currentValue))) {
-      select.value = currentValue;
-    } else {
-      select.value = 'ALL';
-    }
-  }
-
-  function formatDateTime(isoString) {
-    const d = new Date(isoString);
-    return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  }
-
-  function filterSignificantHistory(history) {
-    if (!history || history.length <= 2) return history || [];
-    const filtered = [history[0]];
-    let lastRecorded = history[0];
-
-    for (let i = 1; i < history.length - 1; i++) {
-      const current = history[i];
-      if (Math.abs(current.views - lastRecorded.views) >= Math.max(10, lastRecorded.views * 0.001)) {
-        filtered.push(current);
-        lastRecorded = current;
-      }
-    }
-    filtered.push(history[history.length - 1]);
-    return filtered;
-  }
-
-  function initChart() {
-    const ctx = document.getElementById('viewsChart').getContext('2d');
-    chartInstance = new Chart(ctx, {
-      type: 'line',
-      data: { labels: [], datasets: [] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { title: { display: true, text: '時間' } },
-          y: { title: { display: true, text: '播放次數' }, beginAtZero: false }
-        }
-      }
-    });
-    updateChartAndAnalytics();
-  }
-
-  function updateChartAndAnalytics() {
-    updateChart();
-    updateAnalytics();
-  }
-
-function updateChart() {
-    if (!chartInstance) return;
-    const selectedId = document.getElementById('chartItemSelect').value;
-    const includePublishDate = document.getElementById('includePublishDateCheckbox').checked;
-
-    if (trackedItems.length === 0) {
-      chartInstance.data.labels = [];
-      chartInstance.data.datasets = [];
-      chartInstance.update();
-      return;
-    }
-
-    // 1. 處理數據並紀錄推出時間點與實際紀錄時間點
-    const processedItems = trackedItems.map(item => {
-      let combinedHistory = [...(item.history || [])];
-      let pubTimeISO = null;
-
-      if (includePublishDate && item.publishedAt) {
-        const d = new Date(item.publishedAt);
-        d.setSeconds(0, 0);
-        pubTimeISO = d.toISOString();
-      }
-
-      return { ...item, combinedHistory, pubTimeISO };
-    });
-
-    // 2. 找出全域最新時間戳記
-    let maxTimestamp = 0;
-    processedItems.forEach(item => {
-      item.combinedHistory.forEach(h => {
-        const t = new Date(h.timestamp).getTime();
-        if (t > maxTimestamp) maxTimestamp = t;
-      });
-    });
-
-    // 3. 建立時間地圖與統一時間集合
-    const timeSet = new Set();
-    const maxDate = new Date(maxTimestamp);
-    maxDate.setSeconds(0, 0);
-    const maxMinISO = maxDate.toISOString();
-
-    processedItems.forEach(item => {
-      item.historyMap = new Map();
-      item.combinedHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-      // 找出第一次實際紀錄的時間
-      let firstRealTimeISO = null;
-      if (item.combinedHistory.length > 0) {
-        const fd = new Date(item.combinedHistory[0].timestamp);
-        fd.setSeconds(0, 0);
-        firstRealTimeISO = fd.toISOString();
-      }
-
-      // 若勾選推出日期且有發布時間
-      if (item.pubTimeISO) {
-        // 當發布時間早於或等於第一次紀錄時，才在推出日設 0
-        if (!firstRealTimeISO || item.pubTimeISO <= firstRealTimeISO) {
-          item.historyMap.set(item.pubTimeISO, 0);
-          timeSet.add(item.pubTimeISO);
-        }
-      }
-
-      // 紀錄實際抓到的觀看量歷史點
-      item.combinedHistory.forEach(h => {
-        const d = new Date(h.timestamp);
-        d.setSeconds(0, 0);
-        const minISO = d.toISOString();
-        item.historyMap.set(minISO, h.views);
-        timeSet.add(minISO);
-      });
-
-      // 補齊最後一個最新時間點，使右側對齊
-      const lastViews = item.combinedHistory.length > 0 
-        ? item.combinedHistory[item.combinedHistory.length - 1].views 
-        : 0;
-
-      if (!item.historyMap.has(maxMinISO)) {
-        item.historyMap.set(maxMinISO, lastViews);
-      }
-      timeSet.add(maxMinISO);
-    });
-
-    // 4. X 軸標籤排序
-    const sortedISOList = Array.from(timeSet).sort((a, b) => new Date(a) - new Date(b));
-    const labels = sortedISOList.map(t => formatDateTime(t));
-
-    // 5. 繪製折線圖
-    const itemsToDisplay = selectedId === 'ALL' 
-      ? processedItems 
-      : processedItems.filter(i => i.id === selectedId);
-
-    const datasets = itemsToDisplay.map((item, idx) => {
-      const color = selectedId === 'ALL' 
-        ? CHART_COLORS[idx % CHART_COLORS.length] 
-        : '#ff0000';
-
-      let lastVal = null;
-      let hasReachedFirstRecord = false;
-
-      // 找出該項目第一次實際紀錄的時間點
-      let firstRecordISO = null;
-      if (item.combinedHistory && item.combinedHistory.length > 0) {
-        const fd = new Date(item.combinedHistory[0].timestamp);
-        fd.setSeconds(0, 0);
-        firstRecordISO = fd.toISOString();
-      }
-
-      const alignedData = sortedISOList.map(iso => {
-        // 如果該時間點有確切數值（包含推出日的 0、實際紀錄點、最後對齊點）
-        if (item.historyMap.has(iso)) {
-          const val = item.historyMap.get(iso);
-          if (iso === firstRecordISO) {
-            hasReachedFirstRecord = true;
-          }
-          lastVal = val;
-          return val;
+        const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${id}&key=${key}`);
+        const data = await res.json();
+        
+        if (data.error) {
+          if (!silent) alert(`API 錯誤 (${data.error.code})：${data.error.message}`);
+          return;
         }
 
-        // 在「推出日」與「第一次實際紀錄」之間的時間點填入 null
-        // 配合 spanGaps: true，Chart.js 會直接從 0 連一條直線到第一個數據點
-        if (item.pubTimeISO && iso > item.pubTimeISO && !hasReachedFirstRecord) {
-          return null;
+        if (!data.items || data.items.length === 0) {
+          if (!silent) alert('找不到該影片數據，請確認 ID 是否正確');
+          return;
         }
 
-        // 第一次實際紀錄之後的時間點，若中間無紀錄則沿用前值
-        return lastVal;
-      });
+        const item = data.items[0];
+        const now = new Date().toISOString();
+        const currentViews = parseInt(item.statistics.viewCount || 0, 10);
+        const likes = parseInt(item.statistics.likeCount || 0, 10);
+        const comments = parseInt(item.statistics.commentCount || 0, 10);
+        const channelTitle = item.snippet.channelTitle || '未知頻道';
+        const publishedAt = item.snippet.publishedAt;
 
-      return {
-        label: item.title,
-        data: alignedData,
-        borderColor: color,
-        backgroundColor: selectedId === 'ALL' ? color : 'rgba(255, 0, 0, 0.1)',
-        fill: selectedId !== 'ALL',
-        tension: 0.1,
-        spanGaps: true // 跨越 null 點，將 0 與第一次紀錄點拉出直線
-      };
-    });
+        const existingIndex = trackedItems.findIndex(i => i.id === item.id);
+        
+        if (existingIndex > -1) {
+          trackedItems[existingIndex].title = item.snippet.title;
+          trackedItems[existingIndex].thumbnail = item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : item.snippet.thumbnails.default.url;
+          trackedItems[existingIndex].views = currentViews;
+          trackedItems[existingIndex].likes = likes;
+          trackedItems[existingIndex].comments = comments;
+          trackedItems[existingIndex].channelTitle = channelTitle;
+          trackedItems[existingIndex].publishedAt = publishedAt;
+          trackedItems[existingIndex].updatedAt = now;
+          
+          if (!trackedItems[existingIndex].history) trackedItems[existingIndex].history = [];
+          trackedItems[existingIndex].history.push({ timestamp: now, views: currentViews });
+        } else {
+          trackedItems.push({
+            id: item.id,
+            title: item.snippet.title,
+            thumbnail: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : item.snippet.thumbnails.default.url,
+            views: currentViews,
+            likes: likes,
+            comments: comments,
+            channelTitle: channelTitle,
+            publishedAt: publishedAt,
+            updatedAt: now,
+            history: [{ timestamp: now, views: currentViews }]
+          });
+        }
 
-    chartInstance.data.labels = labels;
-    chartInstance.data.datasets = datasets;
-    chartInstance.update();
-  }
+        saveData();
+        renderList();
+        if (typeof updateChartSelectOptions === 'function') updateChartSelectOptions();
+        
+        try {
+          if (typeof updateChart === 'function') updateChart();
+          if (typeof updateAnalytics === 'function') updateAnalytics();
+        } catch (chartErr) {
+          console.error("更新圖表或分析時出錯：", chartErr);
+        }
 
-  function updateAnalytics() {
-    const selectedId = document.getElementById('chartItemSelect').value;
-    const totalItemsEl = document.getElementById('statTotalItems');
-    const totalViewsEl = document.getElementById('statTotalViews');
-    const hourlyGrowthEl = document.getElementById('statHourlyGrowth');
-    const topItemEl = document.getElementById('statTopItem');
-
-    if (trackedItems.length === 0) {
-      totalItemsEl.innerText = '0';
-      totalViewsEl.innerText = '0';
-      hourlyGrowthEl.innerText = '0 / hr';
-      topItemEl.innerText = '-';
-      return;
-    }
-
-    if (selectedId === 'ALL') {
-      totalItemsEl.innerText = trackedItems.length;
-      totalViewsEl.innerText = trackedItems.reduce((acc, item) => acc + item.views, 0).toLocaleString();
-      let top = trackedItems.reduce((max, item) => item.views > max.views ? item : max, trackedItems[0]);
-      topItemEl.innerText = top.title;
-
-      let totalGrowth = trackedItems.reduce((acc, item) => acc + calculateHourlyGrowth(item), 0);
-      hourlyGrowthEl.innerText = `+${Math.round(totalGrowth).toLocaleString()} / hr`;
-    } else {
-      const item = trackedItems.find(i => i.id === selectedId);
-      if (item) {
-        totalItemsEl.innerText = '1 (單項)';
-        totalViewsEl.innerText = item.views.toLocaleString();
-        topItemEl.innerText = item.title;
-        hourlyGrowthEl.innerText = `+${Math.round(calculateHourlyGrowth(item)).toLocaleString()} / hr`;
-      }
-    }
-  }
-
-  function calculateHourlyGrowth(item) {
-    if (!item.history || item.history.length < 2) return 0;
-    const latest = item.history[item.history.length - 1];
-    const latestTime = new Date(latest.timestamp).getTime();
-    const oneHourAgoTime = latestTime - (60 * 60 * 1000);
-
-    let previous = item.history[0];
-    let minDiff = Math.abs(new Date(previous.timestamp).getTime() - oneHourAgoTime);
-
-    for (let i = 1; i < item.history.length - 1; i++) {
-      const diff = Math.abs(new Date(item.history[i].timestamp).getTime() - oneHourAgoTime);
-      if (diff < minDiff) {
-        minDiff = diff;
-        previous = item.history[i];
+        document.getElementById('targetInput').value = '';
+      } catch (e) {
+        if (!silent) alert(`獲取數據失敗：${e.message}`);
       }
     }
 
-    const timeDiffHours = (latestTime - new Date(previous.timestamp).getTime()) / (1000 * 60 * 60);
-    return timeDiffHours > 0 ? (latest.views - previous.views) / timeDiffHours : 0;
-  }
-
-  function startAutoRefresh() {
-    setInterval(async () => {
-      const apiKey = getApiKey();
-      if (!apiKey || trackedItems.length === 0) return;
-
-      const statusBar = document.getElementById('statusBar');
-      statusBar.innerText = '自動更新中...';
-
-      for (const item of trackedItems) {
-        await fetchVideoData(item.id, apiKey, true);
-      }
-      statusBar.innerText = `最後自動更新：${new Date().toLocaleTimeString()}`;
-    }, AUTO_REFRESH_INTERVAL);
-  }
-
-  function exportData(format) {
-    if (trackedItems.length === 0) return alert('目前沒有數據');
-    let dataStr = "";
-    let fileName = `youtube_tracker_${new Date().toISOString().slice(0,10)}`;
-
-    if (format === 'json') {
-      dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(trackedItems, null, 2));
-      fileName += ".json";
-    } else if (format === 'csv') {
-      let csvContent = "ID,Title,Channel,Views,Likes,Comments,PublishedAt,UpdatedAt\n";
-      trackedItems.forEach(i => {
-        csvContent += `"${i.id}","${i.title.replace(/"/g, '""')}","${(i.channelTitle||'').replace(/"/g, '""')}",${i.views},${i.likes||0},${i.comments||0},"${i.publishedAt||''}","${i.updatedAt}"\n`;
-      });
-      dataStr = "data:text/csv;charset=utf-8,\uFEFF" + encodeURIComponent(csvContent);
-      fileName += ".csv";
-    }
-
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", fileName);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-  }
-
-  function importData(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        if (!Array.isArray(importedData)) return alert('格式錯誤');
-
-        importedData.forEach(newItem => {
-          if (!newItem.id || !newItem.title) return;
-          const index = trackedItems.findIndex(i => i.id === newItem.id);
-          if (index > -1) {
-            trackedItems[index] = newItem;
-          } else {
-            trackedItems.push(newItem);
-          }
-        });
-
+    function removeItem(id) {
+      if (confirm('確定要刪除這支影片的追蹤數據嗎？')) {
+        trackedItems = trackedItems.filter(i => i.id !== id);
         saveData();
         renderList();
         updateChartSelectOptions();
         updateChartAndAnalytics();
-        alert('成功匯入數據');
-      } catch (err) {
-        alert('解析 JSON 檔案失敗');
       }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-  }
-</script>
+    }
+
+    function saveData() {
+      localStorage.setItem(STORAGE_KEY_ITEMS, JSON.stringify(trackedItems));
+    }
+
+    function renderList() {
+      const container = document.getElementById('videoList');
+      container.innerHTML = '';
+
+      if (trackedItems.length === 0) {
+        container.innerHTML = '<div style="color: #999; text-align: center; padding: 20px;">尚無追蹤項目</div>';
+        return;
+      }
+
+      trackedItems.forEach(item => {
+        const pubDateStr = item.publishedAt ? new Date(item.publishedAt).toLocaleDateString() : '未知';
+        const lastUpdateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleTimeString() : '未知';
+
+        const div = document.createElement('div');
+        div.className = 'video-item';
+        div.innerHTML = `
+          <img src="${item.thumbnail}" alt="thumb">
+          <div class="video-info">
+            <div class="video-title">${item.title}</div>
+            <div class="video-channel">${item.channelTitle}</div>
+            <div class="video-meta">發布日期：${pubDateStr} | 最後更新：${lastUpdateStr}</div>
+            <div class="stats-tags">
+              <span class="tag">觀看：${item.views.toLocaleString()}</span>
+              <span class="tag">讚：${item.likes.toLocaleString()}</span>
+            </div>
+          </div>
+          <button class="delete-btn btn-red" onclick="removeItem('${item.id}')">刪除</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function updateChartSelectOptions() {
+      const select = document.getElementById('chartItemSelect');
+      const currentVal = select.value;
+      select.innerHTML = '<option value="ALL">顯示所有項目</option>';
+
+      trackedItems.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = item.title;
+        select.appendChild(opt);
+      });
+
+      if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
+        select.value = currentVal;
+      }
+    }
+
+    function initChart() {
+      const ctx = document.getElementById('viewsChart').getContext('2d');
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: []
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false, // 禁止強制固定比例，讓 CSS 高度生效
+          scales: {
+            x: {
+              title: { display: true, text: '時間' }
+            },
+            y: {
+              title: { display: true, text: '播放次數' },
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    function updateChartAndAnalytics() {
+      updateChart();
+      updateAnalytics();
+    }
+
+    function updateChart() {
+      if (!chartInstance) return;
+      const selectedId = document.getElementById('chartItemSelect').value;
+      const includePublishDate = document.getElementById('includePublishDateCheckbox').checked;
+
+      if (trackedItems.length === 0) {
+        chartInstance.data.labels = [];
+        chartInstance.data.datasets = [];
+        chartInstance.update();
+        return;
+      }
+
+      // 1. 處理數據並紀錄推出時間點與實際紀錄時間點
+      const processedItems = trackedItems.map(item => {
+        let combinedHistory = [...(item.history || [])];
+        let pubTimeISO = null;
+
+        if (includePublishDate && item.publishedAt) {
+          const d = new Date(item.publishedAt);
+          d.setSeconds(0, 0);
+          pubTimeISO = d.toISOString();
+        }
+
+        return { ...item, combinedHistory, pubTimeISO };
+      });
+
+      // 2. 找出全域最新時間戳記
+      let maxTimestamp = 0;
+      processedItems.forEach(item => {
+        item.combinedHistory.forEach(h => {
+          const t = new Date(h.timestamp).getTime();
+          if (t > maxTimestamp) maxTimestamp = t;
+        });
+      });
+
+      // 3. 建立時間地圖與統一時間集合
+      const timeSet = new Set();
+      const maxDate = new Date(maxTimestamp);
+      maxDate.setSeconds(0, 0);
+      const maxMinISO = maxDate.toISOString();
+
+      processedItems.forEach(item => {
+        item.historyMap = new Map();
+        item.combinedHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+        // 找出第一次實際紀錄的時間
+        let firstRealTimeISO = null;
+        if (item.combinedHistory.length > 0) {
+          const fd = new Date(item.combinedHistory[0].timestamp);
+          fd.setSeconds(0, 0);
+          firstRealTimeISO = fd.toISOString();
+        }
+
+        // 若勾選推出日期且有發布時間
+        if (item.pubTimeISO) {
+          if (!firstRealTimeISO || item.pubTimeISO <= firstRealTimeISO) {
+            item.historyMap.set(item.pubTimeISO, 0);
+            timeSet.add(item.pubTimeISO);
+          }
+        }
+
+        // 紀錄實際抓到的觀看量歷史點
+        item.combinedHistory.forEach(h => {
+          const d = new Date(h.timestamp);
+          d.setSeconds(0, 0);
+          const minISO = d.toISOString();
+          item.historyMap.set(minISO, h.views);
+          timeSet.add(minISO);
+        });
+
+        // 補齊最後一個最新時間點，使右側數據對齊
+        const lastViews = item.combinedHistory.length > 0 
+          ? item.combinedHistory[item.combinedHistory.length - 1].views 
+          : 0;
+
+        if (!item.historyMap.has(maxMinISO)) {
+          item.historyMap.set(maxMinISO, lastViews);
+        }
+        timeSet.add(maxMinISO);
+      });
+
+      // 4. X 軸標籤排序
+      const sortedISOList = Array.from(timeSet).sort((a, b) => new Date(a) - new Date(b));
+      const labels = sortedISOList.map(t => formatDateTime(t));
+
+      // 5. 繪製折線圖
+      const itemsToDisplay = selectedId === 'ALL' 
+        ? processedItems 
+        : processedItems.filter(i => i.id === selectedId);
+
+      const datasets = itemsToDisplay.map((item, idx) => {
+        const color = selectedId === 'ALL' 
+          ? CHART_COLORS[idx % CHART_COLORS.length] 
+          : '#ff0000';
+
+        let lastVal = null;
+        let hasReachedFirstRecord = false;
+
+        let firstRecordISO = null;
+        if (item.combinedHistory && item.combinedHistory.length > 0) {
+          const fd = new Date(item.combinedHistory[0].timestamp);
+          fd.setSeconds(0, 0);
+          firstRecordISO = fd.toISOString();
+        }
+
+        const alignedData = sortedISOList.map(iso => {
+          if (item.historyMap.has(iso)) {
+            const val = item.historyMap.get(iso);
+            if (iso === firstRecordISO) {
+              hasReachedFirstRecord = true;
+            }
+            lastVal = val;
+            return val;
+          }
+
+          // 推出日與第一次紀錄之間補 null，讓 Chart.js 自動拉直線
+          if (item.pubTimeISO && iso > item.pubTimeISO && !hasReachedFirstRecord) {
+            return null;
+          }
+
+          return lastVal;
+        });
+
+        return {
+          label: item.title,
+          data: alignedData,
+          borderColor: color,
+          backgroundColor: selectedId === 'ALL' ? color : 'rgba(255, 0, 0, 0.1)',
+          fill: selectedId !== 'ALL',
+          tension: 0.1,
+          spanGaps: true // 跨越 null 點，將 0 與第一次紀錄點拉出直線
+        };
+      });
+
+      chartInstance.data.labels = labels;
+      chartInstance.data.datasets = datasets;
+      chartInstance.update();
+    }
+
+    function updateAnalytics() {
+      document.getElementById('statTotalTracked').textContent = trackedItems.length;
+
+      let totalViews = 0;
+      let topVideo = null;
+      let maxViews = -1;
+
+      trackedItems.forEach(item => {
+        totalViews += (item.views || 0);
+        if (item.views > maxViews) {
+          maxViews = item.views;
+          topVideo = item;
+        }
+      });
+
+      document.getElementById('statTotalViews').textContent = totalViews.toLocaleString();
+      document.getElementById('statTopVideo').textContent = topVideo ? topVideo.title : '-';
+
+      // 簡化計算每小時增長
+      let totalGrowth = 0;
+      trackedItems.forEach(item => {
+        if (item.history && item.history.length >= 2) {
+          const first = item.history[0];
+          const last = item.history[item.history.length - 1];
+          const hours = (new Date(last.timestamp) - new Date(first.timestamp)) / (1000 * 60 * 60);
+          if (hours > 0) {
+            totalGrowth += (last.views - first.views) / hours;
+          }
+        }
+      });
+
+      document.getElementById('statHourlyGrowth').textContent = `+${Math.round(totalGrowth).toLocaleString()} / hr`;
+    }
+
+    function formatDateTime(isoStr) {
+      if (!isoStr) return '';
+      const d = new Date(isoStr);
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${month}/${day} ${hours}:${minutes}`;
+    }
+
+    function exportJSON() {
+      const blob = new Blob([JSON.stringify(trackedItems, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `youtube_tracking_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+    }
+
+    function exportCSV() {
+      let csv = 'ID,Title,Views,Likes,Comments,PublishedAt,UpdatedAt\n';
+      trackedItems.forEach(i => {
+        csv += `"${i.id}","${i.title.replace(/"/g, '""')}",${i.views},${i.likes},${i.comments},"${i.publishedAt}","${i.updatedAt}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `youtube_tracking_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+    }
+
+    function importJSON() {
+      document.getElementById('importFileInput').click();
+    }
+
+    function handleFileImport(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (Array.isArray(imported)) {
+            trackedItems = imported;
+            saveData();
+            renderList();
+            updateChartSelectOptions();
+            updateChartAndAnalytics();
+            alert('成功匯入數據');
+          } else {
+            alert('JSON 格式不正確');
+          }
+        } catch(err) {
+          alert('解析 JSON 檔案失敗');
+        }
+      };
+      reader.readAsText(file);
+    }
+  </script>
 </body>
 </html>
