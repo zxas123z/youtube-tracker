@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube 播放量與數據追蹤器</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        yt: {
+                            red: '#FF0000',
+                            dark: '#0F0F0F',
+                            card: '#1F1F1F',
+                            hover: '#272727'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for better visual integration */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #18181b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #52525b;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-full font-sans flex flex-col antialiased">
+
+    <!-- Header -->
+    <header class="bg-slate-800/80 backdrop-blur border-b border-slate-700 sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-red-600 text-white p-2 rounded-xl shadow-lg shadow-red-600/30">
+                    <i class="fa-brands fa-youtube text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold leading-tight">YouTube 播放量追蹤器</h1>
+                    <p class="text-xs text-slate-400">數據監測與歷史趨勢分析</p>
+                </div>
+            </div>
+
+            <!-- API Key Status & Settings Modal Trigger -->
+            <div class="flex items-center gap-3">
+                <button id="apiKeyStatusBtn" onclick="toggleModal('apiModal')" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-slate-800 border-amber-500/50 text-amber-400 hover:bg-slate-700">
+                    <span id="apiStatusDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span id="apiStatusText">設定 API Key</span>
+                </button>
+                <button onclick="toggleModal('helpModal')" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition" title="使用說明">
+                    <i class="fa-regular fa-circle-question text-lg"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+
+        <!-- Search / Add Item Box -->
+        <section class="bg-slate-800/60 rounded-2xl p-4 sm:p-6 border border-slate-700/60 shadow-xl backdrop-blur-sm">
+            <form id="searchForm" class="space-y-4">
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <div class="relative flex-grow">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </div>
+                        <input type="text" id="targetInput" required
+                            class="w-full pl-10 pr-4 py-3 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                            placeholder="貼上 YouTube 影片網址/ID 或 頻道網址/ID (例如: dQw4w9WgXcQ)">
+                    </div>
+                    <div class="flex gap-2">
+                        <select id="typeSelect" class="bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 text-slate-200">
+                            <option value="auto">自動判斷</option>
+                            <option value="video">單曲/影片</option>
+                            <option value="channel">頻道</option>
+                        </select>
+                        <button type="submit" id="searchBtn" class="flex-shrink-0 bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-xl shadow-lg shadow-red-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>查詢並追蹤</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </section>
+
+        <!-- Content Dashboard Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left Sidebar: Tracked Items List -->
+            <aside class="lg:col-span-4 bg-slate-800/60 rounded-2xl border border-slate-700/60 p-4 flex flex-col h-[600px]">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-700 mb-3">
+                    <h2 class="font-bold text-slate-200 flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-red-500"></i> 已追蹤列表
+                    </h2>
+                    <span id="trackedCount" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-700 text-slate-300">0</span>
+                </div>
+
+                <!-- Tracked Items Container -->
+                <div id="trackedList" class="flex-grow overflow-y-auto space-y-2 pr-1">
+                    <!-- Dynamic rendering will insert cards here -->
+                    <div id="emptyListState" class="text-center py-16 text-slate-500">
+                        <i class="fa-solid fa-ghost text-4xl mb-3"></i>
+                        <p class="text-sm">尚無追蹤項目</p>
+                        <p class="text-xs mt-1 text-slate-600">請在上方輸入網址或 ID 開始追蹤</p>
+                    </div>
+                </div>
+
+                <!-- Import / Export Controls -->
+                <div class="pt-3 border-t border-slate-700 flex gap-2">
+                    <button onclick="exportData('json')" class="flex-1 py-2 px-3 text-xs font-medium bg-slate-700/60 hover:bg-slate-700 text-slate-300 rounded-lg transition text-center flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-file-export"></i> 匯出 JSON
+                    </button>
+                    <button onclick="exportData('csv')" class="flex-1 py-2 px-3 text-xs font-medium bg-slate-700/60 hover:bg-slate-700 text-slate-300 rounded-lg transition text-center flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-file-csv"></i> 匯出 CSV
+                    </button>
+                    <button onclick="document.getElementById('importFileInput').click()" class="py-2 px-3 text-xs font-medium bg-slate-700/60 hover:bg-slate-700 text-slate-300 rounded-lg transition text-center flex items-center justify-center gap-1.5" title="匯入備份">
+                        <i class="fa-solid fa-file-import"></i>
+                    </button>
+                    <input type="file" id="importFileInput" accept=".json" class="hidden" onchange="importData(event)">
+                </div>
+            </aside>
+
+            <!-- Main Detail & Visualization Area -->
+            <section class="lg:col-span-8 space-y-6">
+                <!-- Selected Target Overview -->
+                <div id="detailView" class="bg-slate-800/60 rounded-2xl border border-slate-700/60 p-6 flex flex-col justify-between min-h-[600px]">
+                    <div id="noSelectionState" class="m-auto text-center py-20 text-slate-500">
+                        <i class="fa-solid fa-chart-line text-6xl mb-4 text-slate-700"></i>
+                        <h3 class="text-lg font-semibold text-slate-400">請選擇一個追蹤項目</h3>
+                        <p class="text-xs text-slate-500 mt-1">點擊左側清單中的項目即可檢視詳細播放量趨勢圖表</p>
+                    </div>
+
+                    <div id="activeDetailContent" class="hidden space-y-6">
+                        <!-- Target Header Info -->
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-700">
+                            <div class="flex items-center gap-4">
+                                <img id="detailThumb" src="" alt="Thumbnail" class="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl border border-slate-700 shadow">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <span id="detailBadge" class="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-red-950 text-red-400 border border-red-800/50">VIDEO</span>
+                                        <span id="detailPubDate" class="text-xs text-slate-400"></span>
+                                    </div>
+                                    <h2 id="detailTitle" class="text-base sm:text-lg font-bold text-slate-100 line-clamp-1 mt-1">--</h2>
+                                    <p id="detailSubtitle" class="text-xs text-slate-400 line-clamp-1 mt-0.5">--</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                <button id="fetchLatestBtn" class="flex-1 sm:flex-none px-3.5 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-medium transition flex items-center justify-center gap-1.5">
+                                    <i class="fa-solid fa-rotate"></i> 抓取最新數據
+                                </button>
+                                <a id="ytExternalLink" href="#" target="_blank" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-medium transition flex items-center justify-center gap-1.5">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i> YouTube
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Stat Cards -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/50">
+                                <p class="text-xs text-slate-400">當前總播放量</p>
+                                <p id="statTotalViews" class="text-lg font-bold text-white mt-1">--</p>
+                            </div>
+                            <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/50">
+                                <p class="text-xs text-slate-400">總成長量</p>
+                                <p id="statTotalGrowth" class="text-lg font-bold text-emerald-400 mt-1">--</p>
+                            </div>
+                            <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/50">
+                                <p class="text-xs text-slate-400">按讚數 / 訂閱數</p>
+                                <p id="statSubMetric" class="text-lg font-bold text-slate-200 mt-1">--</p>
+                            </div>
+                            <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/50">
+                                <p class="text-xs text-slate-400">記錄筆數</p>
+                                <p id="statRecordCount" class="text-lg font-bold text-slate-200 mt-1">--</p>
+                            </div>
+                        </div>
+
+                        <!-- Chart Container -->
+                        <div class="bg-slate-900/40 p-4 rounded-xl border border-slate-700/40 relative h-[280px]">
+                            <canvas id="viewChart"></canvas>
+                        </div>
+
+                        <!-- History Records Table -->
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-sm font-semibold text-slate-300">歷史紀錄列表</h3>
+                                <button onclick="manualAddDataPoint()" class="text-xs text-red-400 hover:text-red-300 font-medium">
+                                    + 手動新增數據點
+                                </button>
+                            </div>
+                            <div class="max-h-40 overflow-y-auto rounded-xl border border-slate-700/60 bg-slate-900/50">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-800 text-slate-400 sticky top-0">
+                                        <tr>
+                                            <th class="p-2.5">時間</th>
+                                            <th class="p-2.5">數值 (播放/訂閱)</th>
+                                            <th class="p-2.5">增量</th>
+                                            <th class="p-2.5 text-right">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="historyTableBody" class="divide-y divide-slate-800 text-slate-300">
+                                        <!-- History items dynamic rendering -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- API Key Modal -->
+    <div id="apiModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-800 rounded-2xl max-w-md w-full border border-slate-700 p-6 space-y-5 shadow-2xl">
+            <div class="flex justify-between items-center pb-3 border-b border-slate-700">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-key text-amber-400"></i> 設定 YouTube API Key
+                </h3>
+                <button onclick="toggleModal('apiModal')" class="text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <p class="text-xs text-slate-300 leading-relaxed">
+                本應用完全運行於您的瀏覽器前端，數據直接向 Google YouTube API 查詢。請填入您的 <strong class="text-slate-100">YouTube Data API v3</strong> 金鑰。
+            </p>
+
+            <div>
+                <label for="apiKeyInput" class="block text-xs font-semibold text-slate-400 mb-2">API Key</label>
+                <input type="password" id="apiKeyInput" placeholder="AIzaSy..." 
+                    class="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+            </div>
+
+            <div class="bg-slate-900/60 rounded-xl p-3 text-[11px] text-slate-400 space-y-1">
+                <p class="font-semibold text-slate-300">如何免費獲取 API Key？</p>
+                <ol class="list-decimal pl-4 space-y-0.5">
+                    <li>前往 <a href="https://console.cloud.google.com/" target="_blank" class="text-red-400 underline">Google Cloud Console</a></li>
+                    <li>建立新專案並啟用「YouTube Data API v3」</li>
+                    <li>至「憑證」分頁建立 API 金鑰並貼於上方</li>
+                </ol>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="saveApiKey()" class="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white font-medium text-sm rounded-xl transition shadow-lg shadow-red-600/30">
+                    儲存設定
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-800 rounded-2xl max-w-lg w-full border border-slate-700 p-6 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center pb-3 border-b border-slate-700">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-regular fa-circle-question text-red-500"></i> 使用與輸入說明
+                </h3>
+                <button onclick="toggleModal('helpModal')" class="text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="text-xs text-slate-300 space-y-3 leading-relaxed">
+                <div>
+                    <h4 class="font-semibold text-slate-100 mb-1">支援的輸入格式：</h4>
+                    <ul class="list-disc pl-4 space-y-1 text-slate-400">
+                        <li><strong>影片網址：</strong><code class="bg-slate-900 px-1 py-0.5 rounded">https://www.youtube.com/watch?v=dQw4w9WgXcQ</code></li>
+                        <li><strong>影片 ID：</strong><code class="bg-slate-900 px-1 py-0.5 rounded">dQw4w9WgXcQ</code></li>
+                        <li><strong>頻道網址：</strong><code class="bg-slate-900 px-1 py-0.5 rounded">https://www.youtube.com/channel/UC...</code></li>
+                        <li><strong>頻道 Handle：</strong><code class="bg-slate-900 px-1 py-0.5 rounded">@YouTube</code></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-slate-100 mb-1">資料儲存與安全性：</h4>
+                    <p class="text-slate-400">所有追蹤項目與 API Key 均僅保存在您的個人瀏覽器本地 (localStorage)，不會傳送至任何第三方伺服器。</p>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button onclick="toggleModal('helpModal')" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium text-xs rounded-xl transition">
+                    關閉
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- State Management ---
+        const STORAGE_KEY_ITEMS = 'yt_tracker_items';
+        const STORAGE_KEY_API = 'yt_tracker_api_key';
+
+        let apiKey = localStorage.getItem(STORAGE_KEY_API) || '';
+        let items = JSON.parse(localStorage.getItem(STORAGE_KEY_ITEMS) || '[]');
+        let activeItemId = null;
+        let chartInstance = null;
+
+        // --- DOM Elements ---
+        const searchForm = document.getElementById('searchForm');
+        const targetInput = document.getElementById('targetInput');
+        const typeSelect = document.getElementById('typeSelect');
+        const trackedList = document.getElementById('trackedList');
+        const emptyListState = document.getElementById('emptyListState');
+        const trackedCount = document.getElementById('trackedCount');
+
+        const noSelectionState = document.getElementById('noSelectionState');
+        const activeDetailContent = document.getElementById('activeDetailContent');
+
+        // --- Initialization ---
+        window.addEventListener('DOMContentLoaded', () => {
+            updateApiStatusUI();
+            renderTrackedList();
+            initChart();
+
+            if (items.length > 0) {
+                selectItem(items[0].id);
+            }
+        });
+
+        // --- API Key Management ---
+        function saveApiKey() {
+            const input = document.getElementById('apiKeyInput').value.trim();
+            if (!input) {
+                alert('請輸入有效的 API Key');
+                return;
+            }
+            apiKey = input;
+            localStorage.setItem(STORAGE_KEY_API, apiKey);
+            updateApiStatusUI();
+            toggleModal('apiModal');
+        }
+
+        function updateApiStatusUI() {
+            const dot = document.getElementById('apiStatusDot');
+            const text = document.getElementById('apiStatusText');
+            const btn = document.getElementById('apiKeyStatusBtn');
+            const input = document.getElementById('apiKeyInput');
+
+            if (apiKey) {
+                input.value = apiKey;
+                dot.className = "w-2 h-2 rounded-full bg-emerald-400";
+                text.textContent = "API Key 已設定";
+                btn.className = "flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-slate-800 border-emerald-500/50 text-emerald-400 hover:bg-slate-700";
+            } else {
+                dot.className = "w-2 h-2 rounded-full bg-amber-400 animate-pulse";
+                text.textContent = "設定 API Key";
+                btn.className = "flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-slate-800 border-amber-500/50 text-amber-400 hover:bg-slate-700";
+            }
+        }
+
+        function toggleModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.classList.toggle('hidden');
+        }
+
+        // --- Helper Parsing Functions ---
+        function parseInput(input) {
+            input = input.trim();
+            let videoId = null;
+            let channelId = null;
+            let handle = null;
+
+            // Check Video URL patterns
+            const videoRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+            const videoMatch = input.match(videoRegex);
+
+            if (videoMatch) {
+                videoId = videoMatch[1];
+            } else if (input.length === 11 && !input.startsWith('@') && !input.startsWith('UC')) {
+                videoId = input;
+            }
+
+            // Check Channel Patterns
+            if (!videoId) {
+                const channelRegex = /youtube\.com\/channel\/(UC[a-zA-Z0-9_-]{22})/;
+                const channelMatch = input.match(channelRegex);
+                if (channelMatch) {
+                    channelId = channelMatch[1];
+                } else if (input.startsWith('UC') && input.length === 24) {
+                    channelId = input;
+                } else if (input.startsWith('@')) {
+                    handle = input;
+                }
+            }
+
+            return { videoId, channelId, handle };
+        }
+
+        // --- Data Fetching Logic (YouTube API) ---
+        searchForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!apiKey) {
+                alert('請先設定 YouTube Data API Key！');
+                toggleModal('apiModal');
+                return;
+            }
+
+            const rawVal = targetInput.value;
+            const forceType = typeSelect.value;
+            const parsed = parseInput(rawVal);
+
+            try {
+                let fetchedData = null;
+
+                if ((forceType === 'auto' && parsed.videoId) || forceType === 'video') {
+                    const id = parsed.videoId || rawVal;
+                    fetchedData = await fetchVideoStats(id);
+                } else if ((forceType === 'auto' && (parsed.channelId || parsed.handle)) || forceType === 'channel') {
+                    fetchedData = await fetchChannelStats(parsed.channelId || parsed.handle || rawVal);
+                } else {
+                    // Fallback try video first, then channel
+                    try {
+                        fetchedData = await fetchVideoStats(rawVal);
+                    } catch {
+                        fetchedData = await fetchChannelStats(rawVal);
+                    }
+                }
+
+                if (fetchedData) {
+                    saveTrackedItem(fetchedData);
+                    targetInput.value = '';
+                }
+            } catch (err) {
+                alert('查詢失敗: ' + err.message);
+            }
+        });
+
+        async function fetchVideoStats(videoId) {
+            const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoId}&key=${apiKey}`;
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (!data.items || data.items.length === 0) {
+                throw new Error('找不到指定的 YouTube 影片');
+            }
+
+            const item = data.items[0];
+            return {
+                id: item.id,
+                type: 'video',
+                title: item.snippet.title,
+                subtitle: item.snippet.channelTitle,
+                thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
+                publishedAt: item.snippet.publishedAt,
+                views: parseInt(item.statistics.viewCount || '0', 10),
+                secondaryMetric: parseInt(item.statistics.likeCount || '0', 10), // Likes
+                url: `https://www.youtube.com/watch?v=${item.id}`
+            };
+        }
+
+        async function fetchChannelStats(channelQuery) {
+            let url = '';
+            if (channelQuery.startsWith('UC') && channelQuery.length === 24) {
+                url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelQuery}&key=${apiKey}`;
+            } else if (channelQuery.startsWith('@')) {
+                url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&forHandle=${encodeURIComponent(channelQuery)}&key=${apiKey}`;
+            } else {
+                // Search by query
+                const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(channelQuery)}&key=${apiKey}`;
+                const sRes = await fetch(searchUrl);
+                const sData = await sRes.json();
+                if (!sData.items || sData.items.length === 0) throw new Error('找不到對應頻道');
+                const cId = sData.items[0].id.channelId;
+                url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${cId}&key=${apiKey}`;
+            }
+
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (!data.items || data.items.length === 0) {
+                throw new Error('找不到指定的 YouTube 頻道');
+            }
+
+            const item = data.items[0];
+            return {
+                id: item.id,
+                type: 'channel',
+                title: item.snippet.title,
+                subtitle: `@${item.snippet.customUrl || 'channel'}`,
+                thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
+                publishedAt: item.snippet.publishedAt,
+                views: parseInt(item.statistics.viewCount || '0', 10),
+                secondaryMetric: parseInt(item.statistics.subscriberCount || '0', 10), // Subscribers
+                url: `https://www.youtube.com/channel/${item.id}`
+            };
+        }
+
+        // --- Storage & Data Handlers ---
+        function saveTrackedItem(newData) {
+            const now = new Date().toISOString();
+            let existing = items.find(i => i.id === newData.id);
+
+            if (existing) {
+                // Add new history point
+                existing.history.push({
+                    timestamp: now,
+                    views: newData.views,
+                    secondaryMetric: newData.secondaryMetric
+                });
+                // Update latest metadata
+                existing.title = newData.title;
+                existing.thumbnail = newData.thumbnail;
+                existing.latestViews = newData.views;
+            } else {
+                existing = {
+                    id: newData.id,
+                    type: newData.type,
+                    title: newData.title,
+                    subtitle: newData.subtitle,
+                    thumbnail: newData.thumbnail,
+                    publishedAt: newData.publishedAt,
+                    url: newData.url,
+                    latestViews: newData.views,
+                    history: [{
+                        timestamp: now,
+                        views: newData.views,
+                        secondaryMetric: newData.secondaryMetric
+                    }]
+                };
+                items.unshift(existing);
+            }
+
+            persistItems();
+            renderTrackedList();
+            selectItem(existing.id);
+        }
+
+        function persistItems() {
+            localStorage.setItem(STORAGE_KEY_ITEMS, JSON.stringify(items));
+        }
+
+        function deleteItem(id, event) {
+            event.stopPropagation();
+            if (!confirm('確定要刪除這個追蹤項目及其歷史紀錄嗎？')) return;
+
+            items = items.filter(i => i.id !== id);
+            persistItems();
+            renderTrackedList();
+
+            if (activeItemId === id) {
+                activeItemId = null;
+                if (items.length > 0) {
+                    selectItem(items[0].id);
+                } else {
+                    renderDetailView(null);
+                }
+            }
+        }
+
+        // --- UI Rendering ---
+        function renderTrackedList() {
+            trackedCount.textContent = items.length;
+
+            if (items.length === 0) {
+                emptyListState.classList.remove('hidden');
+                trackedList.innerHTML = '';
+                trackedList.appendChild(emptyListState);
+                return;
+            }
+
+            emptyListState.classList.add('hidden');
+            trackedList.innerHTML = items.map(item => {
+                const isActive = item.id === activeItemId;
+                const latest = item.history[item.history.length - 1];
+                const activeClasses = isActive ? 'bg-slate-700/80 border-red-500/80' : 'bg-slate-900/40 border-slate-700/50 hover:bg-slate-700/40';
+
+                return `
+                    <div onclick="selectItem('${item.id}')" class="p-3 rounded-xl border ${activeClasses} transition cursor-pointer flex items-center justify-between gap-3 group">
+                        <div class="flex items-center gap-3 overflow-hidden">
+                            <img src="${item.thumbnail}" class="w-11 h-11 rounded-lg object-cover flex-shrink-0">
+                            <div class="overflow-hidden">
+                                <p class="text-xs font-semibold text-slate-100 truncate">${escapeHtml(item.title)}</p>
+                                <p class="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
+                                    <i class="fa-solid fa-eye text-[10px]"></i> ${item.latestViews.toLocaleString()}
+                                </p>
+                            </div>
+                        </div>
+                        <button onclick="deleteItem('${item.id}', event)" class="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-red-400 transition" title="刪除">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectItem(id) {
+            activeItemId = id;
+            renderTrackedList();
+            const item = items.find(i => i.id === id);
+            renderDetailView(item);
+        }
+
+        function renderDetailView(item) {
+            if (!item) {
+                noSelectionState.classList.remove('hidden');
+                activeDetailContent.classList.add('hidden');
+                return;
+            }
+
+            noSelectionState.classList.add('hidden');
+            activeDetailContent.classList.remove('hidden');
+
+            document.getElementById('detailThumb').src = item.thumbnail;
+            document.getElementById('detailTitle').textContent = item.title;
+            document.getElementById('detailSubtitle').textContent = item.subtitle;
+            document.getElementById('detailPubDate').textContent = item.publishedAt ? `發布於 ${new Date(item.publishedAt).toLocaleDateString()}` : '';
+            document.getElementById('ytExternalLink').href = item.url;
+
+            const badge = document.getElementById('detailBadge');
+            badge.textContent = item.type === 'video' ? '影片/單曲' : '頻道';
+
+            // Metrics Computation
+            const history = item.history;
+            const currentViews = history[history.length - 1].views;
+            const initialViews = history[0].views;
+            const growth = currentViews - initialViews;
+            const currentSubMetric = history[history.length - 1].secondaryMetric;
+
+            document.getElementById('statTotalViews').textContent = currentViews.toLocaleString();
+            document.getElementById('statTotalGrowth').textContent = (growth >= 0 ? '+' : '') + growth.toLocaleString();
+            document.getElementById('statSubMetric').textContent = currentSubMetric ? currentSubMetric.toLocaleString() : 'N/A';
+            document.getElementById('statRecordCount').textContent = history.length;
+
+            // Bind Refresh Button
+            const refreshBtn = document.getElementById('fetchLatestBtn');
+            refreshBtn.onclick = () => fetchLatestForActiveItem();
+
+            // Render Chart
+            updateChart(history);
+
+            // Render History Table
+            renderHistoryTable(item);
+        }
+
+        async function fetchLatestForActiveItem() {
+            if (!activeItemId) return;
+            const item = items.find(i => i.id === activeItemId);
+            if (!item) return;
+
+            if (!apiKey) {
+                alert('請先設定 API Key');
+                toggleModal('apiModal');
+                return;
+            }
+
+            try {
+                let latest = null;
+                if (item.type === 'video') {
+                    latest = await fetchVideoStats(item.id);
+                } else {
+                    latest = await fetchChannelStats(item.id);
+                }
+                saveTrackedItem(latest);
+            } catch (err) {
+                alert('數據更新失敗: ' + err.message);
+            }
+        }
+
+        function renderHistoryTable(item) {
+            const tbody = document.getElementById('historyTableBody');
+            const history = [...item.history].reverse();
+
+            tbody.innerHTML = history.map((record, index) => {
+                const prevRecord = history[index + 1];
+                const diff = prevRecord ? record.views - prevRecord.views : 0;
+                const diffText = prevRecord ? (diff >= 0 ? `+${diff.toLocaleString()}` : `${diff.toLocaleString()}`) : '-';
+                const diffColor = diff > 0 ? 'text-emerald-400' : (diff < 0 ? 'text-red-400' : 'text-slate-500');
+
+                return `
+                    <tr class="hover:bg-slate-800/40">
+                        <td class="p-2.5">${new Date(record.timestamp).toLocaleString()}</td>
+                        <td class="p-2.5 font-semibold">${record.views.toLocaleString()}</td>
+                        <td class="p-2.5 ${diffColor}">${diffText}</td>
+                        <td class="p-2.5 text-right">
+                            <button onclick="removeHistoryPoint('${item.id}', '${record.timestamp}')" class="text-slate-500 hover:text-red-400">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function removeHistoryPoint(itemId, timestamp) {
+            const item = items.find(i => i.id === itemId);
+            if (!item || item.history.length <= 1) {
+                alert('無法刪除最後一筆歷史紀錄！');
+                return;
+            }
+
+            item.history = item.history.filter(h => h.timestamp !== timestamp);
+            item.latestViews = item.history[item.history.length - 1].views;
+            persistItems();
+            renderDetailView(item);
+        }
+
+        function manualAddDataPoint() {
+            if (!activeItemId) return;
+            const item = items.find(i => i.id === activeItemId);
+
+            const valStr = prompt('請輸入要新增的播放量數值：');
+            if (!valStr) return;
+            const views = parseInt(valStr, 10);
+            if (isNaN(views)) {
+                alert('請輸入有效數字');
+                return;
+            }
+
+            item.history.push({
+                timestamp: new Date().toISOString(),
+                views: views,
+                secondaryMetric: item.history[item.history.length - 1]?.secondaryMetric || 0
+            });
+            // Sort history by timestamp
+            item.history.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            item.latestViews = item.history[item.history.length - 1].views;
+
+            persistItems();
+            renderDetailView(item);
+        }
+
+        // --- Chart.js Configuration ---
+        function initChart() {
+            const ctx = document.getElementById('viewChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: '播放量 (Views)',
+                        data: [],
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: '#1e293b',
+                            titleColor: '#f8fafc',
+                            bodyColor: '#f8fafc',
+                            borderColor: '#334155',
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8', font: { size: 10 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { 
+                                color: '#94a3b8', 
+                                font: { size: 10 },
+                                callback: function(value) {
+                                    if (value >= 1e6) return (value / 1e6).toFixed(1) + 'M';
+                                    if (value >= 1e3) return (value / 1e3).toFixed(1) + 'K';
+                                    return value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart(history) {
+            if (!chartInstance) return;
+
+            const labels = history.map(h => {
+                const d = new Date(h.timestamp);
+                return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+            });
+            const data = history.map(h => h.views);
+
+            chartInstance.data.labels = labels;
+            chartInstance.data.datasets[0].data = data;
+            chartInstance.update();
+        }
+
+        // --- Export / Import Handlers ---
+        function exportData(format) {
+            if (items.length === 0) {
+                alert('目前沒有可匯出的數據');
+                return;
+            }
+
+            if (format === 'json') {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(items, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `yt_tracker_backup_${new Date().toISOString().slice(0,10)}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+            } else if (format === 'csv') {
+                let csvRows = ['ID,Type,Title,Timestamp,Views,SecondaryMetric'];
+                items.forEach(item => {
+                    item.history.forEach(h => {
+                        const titleClean = `"${item.title.replace(/"/g, '""')}"`;
+                        csvRows.push(`${item.id},${item.type},${titleClean},${h.timestamp},${h.views},${h.secondaryMetric || 0}`);
+                    });
+                });
+
+                const csvString = csvRows.join('\n');
+                const blob = new Blob(["\ufeff" + csvString], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `yt_tracker_data_${new Date().toISOString().slice(0,10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (Array.isArray(imported)) {
+                        items = imported;
+                        persistItems();
+                        renderTrackedList();
+                        if (items.length > 0) selectItem(items[0].id);
+                        alert('成功匯入數據！');
+                    } else {
+                        throw new Error('格式不正確');
+                    }
+                } catch (err) {
+                    alert('匯入失敗：檔案格式不符合 JSON 規範');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
