@@ -125,23 +125,24 @@
 
     .item-card {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
       border: 1px solid var(--border-color);
-      padding: 12px 16px;
-      border-radius: 6px;
+      padding: 16px;
+      border-radius: 8px;
       background-color: #fff;
     }
 
     .item-info {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 16px;
+      flex: 1;
     }
 
     .item-info img {
-      width: 60px;
-      height: 60px;
+      width: 100px;
+      height: 75px;
       border-radius: 6px;
       object-fit: cover;
     }
@@ -149,22 +150,54 @@
     .item-details {
       display: flex;
       flex-direction: column;
+      gap: 6px;
+      flex: 1;
     }
 
     .item-title {
       font-weight: 600;
       text-decoration: none;
       color: var(--text-color);
-      margin-bottom: 4px;
+      font-size: 16px;
     }
 
     .item-title:hover {
       color: var(--primary-color);
     }
 
-    .item-stats {
+    .channel-name {
       font-size: 13px;
+      color: #495057;
+      font-weight: 500;
+    }
+
+    .item-meta {
+      font-size: 12px;
       color: #6c757d;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .stats-badge-container {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
+    .badge {
+      background-color: #f1f3f5;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #333;
+    }
+
+    .badge-highlight {
+      background-color: #e7f5ff;
+      color: #1971c2;
+      font-weight: 600;
     }
 
     .chart-container {
@@ -176,6 +209,7 @@
     .action-buttons {
       display: flex;
       gap: 8px;
+      margin-left: 12px;
     }
 
     .export-import-group {
@@ -244,7 +278,7 @@
         <button class="btn-secondary" onclick="manualRefreshAll()">手動即時更新</button>
         <label for="sortSelect" style="font-size: 14px; font-weight: bold;">排序方式：</label>
         <select id="sortSelect" onchange="renderList()" style="width: auto; display: inline-block;">
-          <option value="default">預設（加入時間）</option>
+          <option value="default">預設（區域順序）</option>
           <option value="views-desc">播放量：高至低</option>
           <option value="views-asc">播放量：低至高</option>
           <option value="title-asc">標題：A 至 Z</option>
@@ -364,13 +398,21 @@
       const item = data.items[0];
       const now = new Date().toISOString();
       const currentViews = parseInt(item.statistics.viewCount || 0, 10);
+      const likes = parseInt(item.statistics.likeCount || 0, 10);
+      const comments = parseInt(item.statistics.commentCount || 0, 10);
+      const channelTitle = item.snippet.channelTitle || '未知頻道';
+      const publishedAt = item.snippet.publishedAt;
 
       const existingIndex = trackedItems.findIndex(i => i.id === item.id);
       
       if (existingIndex > -1) {
         trackedItems[existingIndex].title = item.snippet.title;
-        trackedItems[existingIndex].thumbnail = item.snippet.thumbnails.default.url;
+        trackedItems[existingIndex].thumbnail = item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : item.snippet.thumbnails.default.url;
         trackedItems[existingIndex].views = currentViews;
+        trackedItems[existingIndex].likes = likes;
+        trackedItems[existingIndex].comments = comments;
+        trackedItems[existingIndex].channelTitle = channelTitle;
+        trackedItems[existingIndex].publishedAt = publishedAt;
         trackedItems[existingIndex].updatedAt = now;
         
         if (!trackedItems[existingIndex].history) {
@@ -381,8 +423,12 @@
         trackedItems.push({
           id: item.id,
           title: item.snippet.title,
-          thumbnail: item.snippet.thumbnails.default.url,
+          thumbnail: item.snippet.thumbnails.medium ? item.snippet.thumbnails.medium.url : item.snippet.thumbnails.default.url,
           views: currentViews,
+          likes: likes,
+          comments: comments,
+          channelTitle: channelTitle,
+          publishedAt: publishedAt,
           updatedAt: now,
           history: [{ timestamp: now, views: currentViews }]
         });
@@ -427,6 +473,35 @@
     updateChartAndAnalytics();
   }
 
+  function calculateDailyAverage(views, publishedAt) {
+    if (!publishedAt) return 0;
+    const pubDate = new Date(publishedAt);
+    const now = new Date();
+    const diffTime = Math.max(now - pubDate, 1000 * 60 * 60 * 24);
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    return Math.round(views / diffDays);
+  }
+
+  function calculate24hGrowth(history) {
+    if (!history || history.length < 2) return 0;
+    const latest = history[history.length - 1];
+    const latestTime = new Date(latest.timestamp).getTime();
+    const target24hTime = latestTime - (24 * 60 * 60 * 1000);
+
+    let closest = history[0];
+    let minDiff = Math.abs(new Date(closest.timestamp).getTime() - target24hTime);
+
+    for (let i = 1; i < history.length - 1; i++) {
+      const diff = Math.abs(new Date(history[i].timestamp).getTime() - target24hTime);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = history[i];
+      }
+    }
+
+    return Math.max(0, latest.views - closest.views);
+  }
+
   function renderList() {
     const listEl = document.getElementById('trackList');
     const sortType = document.getElementById('sortSelect').value;
@@ -446,20 +521,46 @@
       return;
     }
 
-    listEl.innerHTML = itemsToRender.map(item => `
-      <div class="item-card">
-        <div class="item-info">
-          <img src="${item.thumbnail}" alt="縮圖">
-          <div class="item-details">
-            <a class="item-title" href="https://www.youtube.com/watch?v=${item.id}" target="_blank">${escapeHtml(item.title)}</a>
-            <div class="item-stats">播放量：${item.views.toLocaleString()} 次 (最後更新：${new Date(item.updatedAt).toLocaleString()})</div>
+    listEl.innerHTML = itemsToRender.map(item => {
+      const likes = item.likes || 0;
+      const comments = item.comments || 0;
+      const views = item.views || 0;
+      const engagementRate = views > 0 ? (((likes + comments) / views) * 100).toFixed(2) : '0.00';
+      const dailyAvg = calculateDailyAverage(views, item.publishedAt);
+      const growth24h = calculate24hGrowth(item.history);
+      const publishedDateStr = item.publishedAt ? new Date(item.publishedAt).toLocaleDateString() : '未知';
+      
+      const daysPublished = item.publishedAt ? Math.floor((new Date() - new Date(item.publishedAt)) / (1000 * 60 * 60 * 24)) : 0;
+
+      return `
+        <div class="item-card">
+          <div class="item-info">
+            <img src="${item.thumbnail}" alt="縮圖">
+            <div class="item-details">
+              <a class="item-title" href="https://www.youtube.com/watch?v=${item.id}" target="_blank">${escapeHtml(item.title)}</a>
+              <div class="channel-name">頻道：${escapeHtml(item.channelTitle || '未知')}</div>
+              
+              <div class="item-meta">
+                <span>發布日期：${publishedDateStr} (${daysPublished} 天前)</span>
+                <span>最後更新：${new Date(item.updatedAt).toLocaleTimeString()}</span>
+              </div>
+
+              <div class="stats-badge-container">
+                <span class="badge badge-highlight">播放量：${views.toLocaleString()}</span>
+                <span class="badge">按讚：${likes.toLocaleString()}</span>
+                <span class="badge">留言：${comments.toLocaleString()}</span>
+                <span class="badge">互動率：${engagementRate}%</span>
+                <span class="badge">日均播放：${dailyAvg.toLocaleString()} / 天</span>
+                <span class="badge">24h 增量：+${growth24h.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+          <div class="action-buttons">
+            <button class="btn-danger" onclick="deleteItem('${item.id}')">刪除</button>
           </div>
         </div>
-        <div class="action-buttons">
-          <button class="btn-danger" onclick="deleteItem('${item.id}')">刪除</button>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   function updateChartSelectOptions() {
@@ -481,7 +582,6 @@
     }
   }
 
-  // 格式化日期時間（顯示月/日 時:分）
   function formatDateTime(isoString) {
     const d = new Date(isoString);
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -491,7 +591,6 @@
     return `${month}/${date} ${hours}:${minutes}`;
   }
 
-  // 自動過濾/合併變化量過小的數據點
   function filterSignificantHistory(history) {
     if (!history || history.length === 0) return [];
     if (history.length <= 2) return history;
@@ -502,8 +601,6 @@
     for (let i = 1; i < history.length - 1; i++) {
       const current = history[i];
       const viewsDiff = Math.abs(current.views - lastRecorded.views);
-      
-      // 合併條件：變化量大於 10 次，或是變化比例大於 0.1%
       const minThreshold = Math.max(10, lastRecorded.views * 0.001);
 
       if (viewsDiff >= minThreshold) {
@@ -512,7 +609,6 @@
       }
     }
 
-    // 始終保留最後一個最新數據點
     filtered.push(history[history.length - 1]);
     return filtered;
   }
@@ -558,7 +654,6 @@
       return;
     }
 
-    // 取得經優化過濾後的數據點
     const processedItems = trackedItems.map(item => ({
       ...item,
       history: filterSignificantHistory(item.history)
@@ -661,9 +756,21 @@
     if (!item.history || item.history.length < 2) return 0;
     
     const latest = item.history[item.history.length - 1];
-    const previous = item.history[item.history.length - 2];
+    const latestTime = new Date(latest.timestamp).getTime();
+    const oneHourAgoTime = latestTime - (60 * 60 * 1000);
 
-    const timeDiffHours = (new Date(latest.timestamp) - new Date(previous.timestamp)) / (1000 * 60 * 60);
+    let previous = item.history[0];
+    let minDiff = Math.abs(new Date(previous.timestamp).getTime() - oneHourAgoTime);
+
+    for (let i = 1; i < item.history.length - 1; i++) {
+      const diff = Math.abs(new Date(item.history[i].timestamp).getTime() - oneHourAgoTime);
+      if (diff < minDiff) {
+        minDiff = diff;
+        previous = item.history[i];
+      }
+    }
+
+    const timeDiffHours = (latestTime - new Date(previous.timestamp).getTime()) / (1000 * 60 * 60);
     const viewsDiff = latest.views - previous.views;
 
     if (timeDiffHours <= 0) return 0;
@@ -697,9 +804,9 @@
       dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(trackedItems, null, 2));
       fileName += ".json";
     } else if (format === 'csv') {
-      let csvContent = "ID,Title,Views,UpdatedAt\n";
+      let csvContent = "ID,Title,Channel,Views,Likes,Comments,PublishedAt,UpdatedAt\n";
       trackedItems.forEach(i => {
-        csvContent += `"${i.id}","${i.title.replace(/"/g, '""')}",${i.views},"${i.updatedAt}"\n`;
+        csvContent += `"${i.id}","${i.title.replace(/"/g, '""')}","${(i.channelTitle||'').replace(/"/g, '""')}",${i.views},${i.likes||0},${i.comments||0},"${i.publishedAt||''}","${i.updatedAt}"\n`;
       });
       dataStr = "data:text/csv;charset=utf-8,\uFEFF" + encodeURIComponent(csvContent);
       fileName += ".csv";
