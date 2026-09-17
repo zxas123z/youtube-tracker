@@ -647,14 +647,8 @@
 
       saveData();
       renderList();
-      if (typeof updateChartSelectOptions === 'function') updateChartSelectOptions();
-      
-      try {
-        if (typeof updateChart === 'function') updateChart();
-        if (typeof updateAnalytics === 'function') updateAnalytics();
-      } catch (chartErr) {
-        console.error("更新圖表或分析時出錯：", chartErr);
-      }
+      updateChartSelectOptions();
+      updateChartAndAnalytics();
 
       document.getElementById('targetInput').value = '';
     } catch (e) {
@@ -717,7 +711,7 @@
     return Math.max(0, latest.views - closest.views);
   }
 
-  function calculate100kCountdown(currentViews, history) {
+  function calculate100kCountdown(currentViews, publishedAt) {
     const TARGET_VIEWS = 1000000;
     
     if (currentViews >= TARGET_VIEWS) {
@@ -729,9 +723,9 @@
     }
 
     const remainingViews = TARGET_VIEWS - currentViews;
-    const growth24h = calculate24hGrowth(history);
+    const dailyAvg = calculateDailyAverage(currentViews, publishedAt);
 
-    if (growth24h <= 0) {
+    if (dailyAvg <= 0) {
       return {
         remainingViews: remainingViews,
         formattedCountdown: `還差 ${remainingViews.toLocaleString()} 次`,
@@ -739,14 +733,14 @@
       };
     }
 
-    const hourlyGrowth = growth24h / 24;
-    const hoursNeeded = remainingViews / hourlyGrowth;
+    const daysNeeded = remainingViews / dailyAvg;
+    const hoursNeeded = daysNeeded * 24;
 
     const predictedDate = new Date(Date.now() + hoursNeeded * 60 * 60 * 1000);
     const predictedDateStr = `${predictedDate.getFullYear()}/${String(predictedDate.getMonth() + 1).padStart(2, '0')}/${String(predictedDate.getDate()).padStart(2, '0')} ${String(predictedDate.getHours()).padStart(2, '0')}:${String(predictedDate.getMinutes()).padStart(2, '0')}`;
 
-    const days = Math.floor(hoursNeeded / 24);
-    const hours = Math.floor(hoursNeeded % 24);
+    const days = Math.floor(daysNeeded);
+    const hours = Math.floor((daysNeeded - days) * 24);
     let timeRemainingStr = "";
     if (days > 0) {
       timeRemainingStr = `約需 ${days} 天 ${hours} 小時`;
@@ -788,7 +782,7 @@
       const daysPublished = pubDate ? Math.max(0, Math.floor((new Date() - pubDate) / (1000 * 60 * 60 * 24))) : 0;
       const lastUpdateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleTimeString() : '未知';
 
-      const countdownInfo = calculate100kCountdown(views, item.history);
+      const countdownInfo = calculate100kCountdown(views, item.publishedAt);
 
       return `
         <div class="item-card">
@@ -875,13 +869,71 @@
       return;
     }
 
-    const itemsToDisplay = selectedId === 'ALL' 
-      ? trackedItems 
-      : trackedItems.filter(i => i.id === selectedId);
+    if (selectedId === 'ALL') {
+      const processedItems = trackedItems.map(item => {
+        const itemDateMap = new Map();
 
-    const timeSet = new Set();
+        if (includePublishDate && item.publishedAt) {
+          const pubDate = new Date(item.publishedAt);
+          const dateStr = `${pubDate.getFullYear()}/${String(pubDate.getMonth() + 1).padStart(2, '0')}/${String(pubDate.getDate()).padStart(2, '0')}`;
+          itemDateMap.set(dateStr, 0);
+        }
 
-    const processedItems = itemsToDisplay.map(item => {
+        if (item.history && item.history.length > 0) {
+          item.history.forEach(h => {
+            const d = new Date(h.timestamp);
+            const dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+            const currentMax = itemDateMap.get(dateStr);
+            if (currentMax === undefined || h.views > currentMax) {
+              itemDateMap.set(dateStr, h.views);
+            }
+          });
+        }
+
+        return {
+          id: item.id,
+          title: item.title,
+          dateMap: itemDateMap
+        };
+      });
+
+      const allDatesSet = new Set();
+      processedItems.forEach(item => {
+        item.dateMap.forEach((_, dateStr) => allDatesSet.add(dateStr));
+      });
+      const sortedDates = Array.from(allDatesSet).sort((a, b) => new Date(a) - new Date(b));
+
+      const datasets = processedItems.map((item, idx) => {
+        const color = CHART_COLORS[idx % CHART_COLORS.length];
+        const data = sortedDates.map(dateStr => {
+          const val = item.dateMap.get(dateStr);
+          return val !== undefined ? val : null;
+        });
+
+        return {
+          label: item.title,
+          data: data,
+          borderColor: color,
+          backgroundColor: color,
+          fill: false,
+          tension: 0.1,
+          spanGaps: true,
+          pointRadius: 4,
+          pointHoverRadius: 6
+        };
+      });
+
+      chartInstance.data.labels = sortedDates;
+      chartInstance.data.datasets = datasets;
+      chartInstance.options.scales.x = {
+        title: { display: true, text: '日期 (天)' },
+        ticks: { autoSkip: true, maxRotation: 45 }
+      };
+
+    } else {
+      const item = trackedItems.find(i => i.id === selectedId);
+      if (!item) return;
+
       let points = [];
 
       if (includePublishDate && item.publishedAt) {
@@ -901,54 +953,32 @@
       }
 
       points.sort((a, b) => a.timestamp - b.timestamp);
-      points.forEach(p => timeSet.add(p.timestamp));
 
-      return {
-        id: item.id,
-        title: item.title,
-        points: points
-      };
-    });
-
-    const sortedTimestamps = Array.from(timeSet).sort((a, b) => a - b);
-    const labels = sortedTimestamps.map(ts => {
-      const d = new Date(ts);
-      return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
-    });
-
-    const datasets = processedItems.map((item, idx) => {
-      const color = selectedId === 'ALL' 
-        ? CHART_COLORS[idx % CHART_COLORS.length] 
-        : '#ff0000';
-
-      const data = sortedTimestamps.map(ts => {
-        const found = item.points.find(p => p.timestamp === ts);
-        return found ? found.views : null;
+      const labels = points.map(p => {
+        const d = new Date(p.timestamp);
+        return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
       });
 
-      return {
+      const data = points.map(p => p.views);
+
+      chartInstance.data.labels = labels;
+      chartInstance.data.datasets = [{
         label: item.title,
         data: data,
-        borderColor: color,
-        backgroundColor: selectedId === 'ALL' ? color : 'rgba(255, 0, 0, 0.1)',
-        fill: selectedId !== 'ALL',
+        borderColor: '#ff0000',
+        backgroundColor: 'rgba(255, 0, 0, 0.1)',
+        fill: true,
         tension: 0.1,
         spanGaps: true,
         pointRadius: 4,
         pointHoverRadius: 6
+      }];
+
+      chartInstance.options.scales.x = {
+        title: { display: true, text: '時間 (月/日 時:分)' },
+        ticks: { autoSkip: true, maxRotation: 45 }
       };
-    });
-
-    chartInstance.data.labels = labels;
-    chartInstance.data.datasets = datasets;
-
-    chartInstance.options.scales.x = {
-      title: { display: true, text: '日期' },
-      ticks: {
-        autoSkip: true,
-        maxRotation: 45
-      }
-    };
+    }
 
     chartInstance.update();
   }
