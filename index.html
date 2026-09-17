@@ -593,7 +593,7 @@
     return (match && match[2].length === 11) ? match[2] : (url.length === 11 ? url : null);
   }
 
-async function fetchVideoData(id, key, silent = false) {
+  async function fetchVideoData(id, key, silent = false) {
     try {
       const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${id}&key=${key}`);
       const data = await res.json();
@@ -649,7 +649,6 @@ async function fetchVideoData(id, key, silent = false) {
       renderList();
       if (typeof updateChartSelectOptions === 'function') updateChartSelectOptions();
       
-      // 避免圖表或分析函數拋出錯誤導致彈出失敗提示
       try {
         if (typeof updateChart === 'function') updateChart();
         if (typeof updateAnalytics === 'function') updateAnalytics();
@@ -688,8 +687,8 @@ async function fetchVideoData(id, key, silent = false) {
     trackedItems = trackedItems.filter(item => item.id !== id);
     saveData();
     renderList();
-    SelectOptions();
-    AndAnalytics();
+    updateChartSelectOptions();
+    updateChartAndAnalytics();
   }
 
   function calculateDailyAverage(views, publishedAt) {
@@ -716,6 +715,50 @@ async function fetchVideoData(id, key, silent = false) {
       }
     }
     return Math.max(0, latest.views - closest.views);
+  }
+
+  function calculate100kCountdown(currentViews, history) {
+    const TARGET_VIEWS = 1000000;
+    
+    if (currentViews >= TARGET_VIEWS) {
+      return {
+        remainingViews: 0,
+        formattedCountdown: "已達標 100w！",
+        predictedDateStr: "已達成"
+      };
+    }
+
+    const remainingViews = TARGET_VIEWS - currentViews;
+    const growth24h = calculate24hGrowth(history);
+
+    if (growth24h <= 0) {
+      return {
+        remainingViews: remainingViews,
+        formattedCountdown: `還差 ${remainingViews.toLocaleString()} 次`,
+        predictedDateStr: "無法預測（無成長）"
+      };
+    }
+
+    const hourlyGrowth = growth24h / 24;
+    const hoursNeeded = remainingViews / hourlyGrowth;
+
+    const predictedDate = new Date(Date.now() + hoursNeeded * 60 * 60 * 1000);
+    const predictedDateStr = `${predictedDate.getFullYear()}/${String(predictedDate.getMonth() + 1).padStart(2, '0')}/${String(predictedDate.getDate()).padStart(2, '0')} ${String(predictedDate.getHours()).padStart(2, '0')}:${String(predictedDate.getMinutes()).padStart(2, '0')}`;
+
+    const days = Math.floor(hoursNeeded / 24);
+    const hours = Math.floor(hoursNeeded % 24);
+    let timeRemainingStr = "";
+    if (days > 0) {
+      timeRemainingStr = `約需 ${days} 天 ${hours} 小時`;
+    } else {
+      timeRemainingStr = `約需 ${hours} 小時`;
+    }
+
+    return {
+      remainingViews: remainingViews,
+      formattedCountdown: `還差 ${remainingViews.toLocaleString()} 次 (${timeRemainingStr})`,
+      predictedDateStr: predictedDateStr
+    };
   }
 
   function renderList() {
@@ -745,6 +788,8 @@ async function fetchVideoData(id, key, silent = false) {
       const daysPublished = pubDate ? Math.max(0, Math.floor((new Date() - pubDate) / (1000 * 60 * 60 * 24))) : 0;
       const lastUpdateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleTimeString() : '未知';
 
+      const countdownInfo = calculate100kCountdown(views, item.history);
+
       return `
         <div class="item-card">
           <div class="item-info">
@@ -762,6 +807,12 @@ async function fetchVideoData(id, key, silent = false) {
                 <span class="badge">互動：${engagementRate}%</span>
                 <span class="badge">日均：${dailyAvg.toLocaleString()}</span>
                 <span class="badge">24h：+${growth24h.toLocaleString()}</span>
+                <span class="badge" style="background-color: #fff3bf; color: #f59f00; font-weight: bold;">
+                  100w 倒數：${countdownInfo.formattedCountdown}
+                </span>
+                <span class="badge" style="background-color: #e6fcf5; color: #0ca678; font-weight: bold;">
+                  預計達標：${countdownInfo.predictedDateStr}
+                </span>
               </div>
             </div>
           </div>
@@ -790,27 +841,6 @@ async function fetchVideoData(id, key, silent = false) {
     }
   }
 
-  function formatDateTime(isoString) {
-    const d = new Date(isoString);
-    return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  }
-
-  function filterSignificantHistory(history) {
-    if (!history || history.length <= 2) return history || [];
-    const filtered = [history[0]];
-    let lastRecorded = history[0];
-
-    for (let i = 1; i < history.length - 1; i++) {
-      const current = history[i];
-      if (Math.abs(current.views - lastRecorded.views) >= Math.max(10, lastRecorded.views * 0.001)) {
-        filtered.push(current);
-        lastRecorded = current;
-      }
-    }
-    filtered.push(history[history.length - 1]);
-    return filtered;
-  }
-
   function initChart() {
     const ctx = document.getElementById('viewsChart').getContext('2d');
     chartInstance = new Chart(ctx, {
@@ -820,7 +850,7 @@ async function fetchVideoData(id, key, silent = false) {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          x: { title: { display: true, text: '時間' } },
+          x: { title: { display: true, text: '日期' } },
           y: { title: { display: true, text: '播放次數' }, beginAtZero: false }
         }
       }
@@ -833,7 +863,7 @@ async function fetchVideoData(id, key, silent = false) {
     updateAnalytics();
   }
 
-function updateChart() {
+  function updateChart() {
     if (!chartInstance) return;
     const selectedId = document.getElementById('chartItemSelect').value;
     const includePublishDate = document.getElementById('includePublishDateCheckbox').checked;
@@ -845,135 +875,81 @@ function updateChart() {
       return;
     }
 
-    // 1. 處理數據並紀錄推出時間點與實際紀錄時間點
-    const processedItems = trackedItems.map(item => {
-      let combinedHistory = [...(item.history || [])];
-      let pubTimeISO = null;
+    const itemsToDisplay = selectedId === 'ALL' 
+      ? trackedItems 
+      : trackedItems.filter(i => i.id === selectedId);
+
+    const timeSet = new Set();
+
+    const processedItems = itemsToDisplay.map(item => {
+      let points = [];
 
       if (includePublishDate && item.publishedAt) {
-        const d = new Date(item.publishedAt);
-        d.setSeconds(0, 0);
-        pubTimeISO = d.toISOString();
+        points.push({
+          timestamp: new Date(item.publishedAt).getTime(),
+          views: 0
+        });
       }
 
-      return { ...item, combinedHistory, pubTimeISO };
+      if (item.history && item.history.length > 0) {
+        item.history.forEach(h => {
+          points.push({
+            timestamp: new Date(h.timestamp).getTime(),
+            views: h.views
+          });
+        });
+      }
+
+      points.sort((a, b) => a.timestamp - b.timestamp);
+      points.forEach(p => timeSet.add(p.timestamp));
+
+      return {
+        id: item.id,
+        title: item.title,
+        points: points
+      };
     });
 
-    // 2. 找出全域最新時間戳記
-    let maxTimestamp = 0;
-    processedItems.forEach(item => {
-      item.combinedHistory.forEach(h => {
-        const t = new Date(h.timestamp).getTime();
-        if (t > maxTimestamp) maxTimestamp = t;
-      });
+    const sortedTimestamps = Array.from(timeSet).sort((a, b) => a - b);
+    const labels = sortedTimestamps.map(ts => {
+      const d = new Date(ts);
+      return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
     });
 
-    // 3. 建立時間地圖與統一時間集合
-    const timeSet = new Set();
-    const maxDate = new Date(maxTimestamp);
-    maxDate.setSeconds(0, 0);
-    const maxMinISO = maxDate.toISOString();
-
-    processedItems.forEach(item => {
-      item.historyMap = new Map();
-      item.combinedHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-      // 找出第一次實際紀錄的時間
-      let firstRealTimeISO = null;
-      if (item.combinedHistory.length > 0) {
-        const fd = new Date(item.combinedHistory[0].timestamp);
-        fd.setSeconds(0, 0);
-        firstRealTimeISO = fd.toISOString();
-      }
-
-      // 若勾選推出日期且有發布時間
-      if (item.pubTimeISO) {
-        // 當發布時間早於或等於第一次紀錄時，才在推出日設 0
-        if (!firstRealTimeISO || item.pubTimeISO <= firstRealTimeISO) {
-          item.historyMap.set(item.pubTimeISO, 0);
-          timeSet.add(item.pubTimeISO);
-        }
-      }
-
-      // 紀錄實際抓到的觀看量歷史點
-      item.combinedHistory.forEach(h => {
-        const d = new Date(h.timestamp);
-        d.setSeconds(0, 0);
-        const minISO = d.toISOString();
-        item.historyMap.set(minISO, h.views);
-        timeSet.add(minISO);
-      });
-
-      // 補齊最後一個最新時間點，使右側對齊
-      const lastViews = item.combinedHistory.length > 0 
-        ? item.combinedHistory[item.combinedHistory.length - 1].views 
-        : 0;
-
-      if (!item.historyMap.has(maxMinISO)) {
-        item.historyMap.set(maxMinISO, lastViews);
-      }
-      timeSet.add(maxMinISO);
-    });
-
-    // 4. X 軸標籤排序
-    const sortedISOList = Array.from(timeSet).sort((a, b) => new Date(a) - new Date(b));
-    const labels = sortedISOList.map(t => formatDateTime(t));
-
-    // 5. 繪製折線圖
-    const itemsToDisplay = selectedId === 'ALL' 
-      ? processedItems 
-      : processedItems.filter(i => i.id === selectedId);
-
-    const datasets = itemsToDisplay.map((item, idx) => {
+    const datasets = processedItems.map((item, idx) => {
       const color = selectedId === 'ALL' 
         ? CHART_COLORS[idx % CHART_COLORS.length] 
         : '#ff0000';
 
-      let lastVal = null;
-      let hasReachedFirstRecord = false;
-
-      // 找出該項目第一次實際紀錄的時間點
-      let firstRecordISO = null;
-      if (item.combinedHistory && item.combinedHistory.length > 0) {
-        const fd = new Date(item.combinedHistory[0].timestamp);
-        fd.setSeconds(0, 0);
-        firstRecordISO = fd.toISOString();
-      }
-
-      const alignedData = sortedISOList.map(iso => {
-        // 如果該時間點有確切數值（包含推出日的 0、實際紀錄點、最後對齊點）
-        if (item.historyMap.has(iso)) {
-          const val = item.historyMap.get(iso);
-          if (iso === firstRecordISO) {
-            hasReachedFirstRecord = true;
-          }
-          lastVal = val;
-          return val;
-        }
-
-        // 在「推出日」與「第一次實際紀錄」之間的時間點填入 null
-        // 配合 spanGaps: true，Chart.js 會直接從 0 連一條直線到第一個數據點
-        if (item.pubTimeISO && iso > item.pubTimeISO && !hasReachedFirstRecord) {
-          return null;
-        }
-
-        // 第一次實際紀錄之後的時間點，若中間無紀錄則沿用前值
-        return lastVal;
+      const data = sortedTimestamps.map(ts => {
+        const found = item.points.find(p => p.timestamp === ts);
+        return found ? found.views : null;
       });
 
       return {
         label: item.title,
-        data: alignedData,
+        data: data,
         borderColor: color,
         backgroundColor: selectedId === 'ALL' ? color : 'rgba(255, 0, 0, 0.1)',
         fill: selectedId !== 'ALL',
         tension: 0.1,
-        spanGaps: true // 跨越 null 點，將 0 與第一次紀錄點拉出直線
+        spanGaps: true,
+        pointRadius: 4,
+        pointHoverRadius: 6
       };
     });
 
     chartInstance.data.labels = labels;
     chartInstance.data.datasets = datasets;
+
+    chartInstance.options.scales.x = {
+      title: { display: true, text: '日期' },
+      ticks: {
+        autoSkip: true,
+        maxRotation: 45
+      }
+    };
+
     chartInstance.update();
   }
 
